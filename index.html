@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101b18">
+    <meta name="description" content="以逐球紀錄操作、重播與復原的棒球記分板。">
+    <title>球場邊 — 棒球記分板</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="球場邊首頁"><span class="brand-mark">球</span>球場邊</a>
+      <div class="topbar-actions">
+        <span class="live-label"><span></span> LIVE SCORING</span>
+        <button class="button button-quiet" id="lineup-button" type="button">比賽資訊／先發名單</button>
+        <button class="button button-quiet" id="defense-change-button" type="button">更換守備</button>
+        <button class="button button-quiet" id="pinch-hit-button" type="button">代打／代跑</button>
+        <button class="button button-quiet" id="setup-button" type="button">直接設定</button>
+        <button class="button button-quiet" id="new-game-button" type="button">重設比賽</button>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section class="game-heading">
+        <div>
+          <p class="eyebrow scoreboard-label">比賽記分板</p>
+          <h1 class="game-info-title" id="game-meta">比賽資訊</h1>
+        </div>
+        <div class="current-score" aria-label="目前比分">
+          <span id="away-team-name" class="score-team-name">客隊</span><strong id="away-score">0</strong><b>:</b><strong id="home-score">0</strong><span id="home-team-name" class="score-team-name">主隊</span>
+        </div>
+        <div class="inning-indicator"><strong id="inning-number">1</strong><span id="inning-half">局上</span></div>
+      </section>
+      <section class="scoreboard panel" aria-label="九局記分板">
+        <div class="scoreboard-scroll">
+          <table class="score-table">
+            <thead id="score-head"></thead>
+            <tbody id="score-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="game-layout">
+        <div class="play-column">
+          <section class="panel count-panel" aria-label="目前打席狀況">
+            <div class="count-heading">
+              <div>
+                <p class="eyebrow">AT BAT</p>
+                <h2 id="batter-name">第 1 棒</h2>
+              </div>
+              <span class="half-inning-tag" id="batting-side">客隊進攻</span>
+            </div>
+            <div class="count-details">
+              <div class="count-group" aria-label="好壞球數">
+                <span class="count-label">好壞球</span>
+                <div class="count-line"><span class="count-letter">B</span><span class="count-dots" id="ball-dots"></span><b id="ball-count">0</b></div>
+                <div class="count-line"><span class="count-letter">S</span><span class="count-dots" id="strike-dots"></span><b id="strike-count">0</b></div>
+              </div>
+              <div class="out-group">
+                <span class="count-label">出局數</span>
+                <div class="out-lights" id="out-lights"></div>
+                <strong><span id="out-count">0</span><small> OUT</small></strong>
+              </div>
+              <div class="pitcher-count">
+                <span class="count-label">用球數</span>
+                <strong id="pitch-count">0</strong><small> 球</small>
+              </div>
+            </div>
+            <div class="batter-history">
+              <span class="count-label">過往打席</span>
+              <div id="batter-history" class="batter-history-list">無</div>
+            </div>
+            <div class="bases-row">
+              <div><span>一壘</span><strong id="runner-first">空</strong></div>
+              <div><span>二壘</span><strong id="runner-second">空</strong></div>
+              <div><span>三壘</span><strong id="runner-third">空</strong></div>
+            </div>
+          </section>
+
+          <section class="panel actions-panel" aria-labelledby="actions-heading">
+            <div class="section-heading">
+              <div><p class="eyebrow">RECORD A PLAY</p><h2 id="actions-heading">記錄這一球</h2></div>
+            </div>
+            <div class="action-groups">
+              <div class="action-group">
+              <h3><span class="group-icon icon-pitch">↗</span>未打擊出去</h3>
+                <div class="action-buttons">
+                  <button class="play-button" data-play="swinging-strike">揮棒落空<span>SWINGING STRIKE</span></button>
+                  <button class="play-button" data-play="foul-tip">擦棒被捕<span>FOUL TIP</span></button>
+                  <button class="play-button" data-play="called-strike">好球未揮棒<span>CALLED STRIKE</span></button>
+                  <button class="play-button" data-play="ball">壞球<span>BALL</span></button>
+                  <button class="play-button" data-play="hbp">觸身球<span>HBP</span></button>
+                  <button class="play-button" data-play="uncaught-third-strike">不死三振<span>UNCAUGHT THIRD STRIKE</span></button>
+                </div>
+              </div>
+              <div class="action-group">
+                <h3><span class="group-icon icon-hit">↗</span>打擊出去</h3>
+                <div class="action-buttons">
+                  <button class="play-button" data-play="foul">界外球<span>FOUL</span></button>
+                  <button class="play-button" data-play="out">接殺出局<span>OUT</span></button>
+                  <button class="play-button" data-play="force-out">封殺出局<span>FORCE OUT</span></button>
+                  <button class="play-button" data-play="fielder-choice">野手選擇<span>FC</span></button>
+                  <button class="play-button" data-play="single">一壘安打<span>1B</span></button>
+                  <button class="play-button" data-play="double">二壘安打<span>2B</span></button>
+                  <button class="play-button" data-play="triple">三壘安打<span>3B</span></button>
+                  <button class="play-button play-button-highlight" data-play="home-run">全壘打<span>HR</span></button>
+                  <button class="play-button sacrifice-button" data-play="sacrifice">犧牲打<span>SAC</span></button>
+                  <button class="play-button" data-play="error">失誤上壘<span>E</span></button>
+                </div>
+              </div>
+              <div class="action-group">
+                <h3><span class="group-icon icon-other">＋</span>其他紀錄</h3>
+                <div class="action-buttons">
+                  <button class="play-button" data-play="intentional-walk">故意四壞<span>IBB</span></button>
+                  <button class="play-button" data-play="steal">盜壘<span>SB</span></button>
+                  <button class="play-button" data-play="pickoff">牽制出局<span>PO</span></button>
+                  <button class="play-button" data-play="timeout-ball">超時壞球<span>不計球數</span></button>
+                  <button class="play-button" data-play="timeout-strike">超時好球<span>不計球數</span></button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel history-panel" aria-labelledby="history-heading">
+            <div class="section-heading history-heading">
+              <div><p class="eyebrow">GAME TIMELINE</p><h2 id="history-heading">逐球紀錄 <span id="record-total">0</span></h2></div>
+              <button class="button button-quiet" id="undo-button" type="button" disabled>↶ 復原上一筆</button>
+            </div>
+            <div class="history-tools">
+              <div class="inning-pager">
+                <button class="button button-quiet" id="previous-inning" type="button" aria-label="上一局">‹</button>
+                <strong id="history-inning-label">第 1 局</strong>
+                <button class="button button-quiet" id="next-inning" type="button" aria-label="下一局">›</button>
+              </div>
+              <div class="history-actions">
+                <button class="button button-quiet" id="export-button" type="button">匯出比賽紀錄</button>
+                <button class="button button-quiet" id="import-button" type="button">讀取比賽紀錄</button>
+                <input id="import-file" type="file" accept=".txt,.json,.jsonl,application/json,text/plain" hidden>
+              </div>
+            </div>
+            <div class="half-tabs" id="half-tabs" role="tablist" aria-label="選擇上半局或下半局"></div>
+            <p class="history-help" id="history-help">紀錄依半局整理，可在紀錄區內捲動閱讀。</p>
+            <ol class="record-list" id="record-list"></ol>
+          </section>
+        </div>
+
+        <aside class="side-column">
+          <section class="panel field-panel" aria-labelledby="field-heading">
+            <div class="section-heading">
+              <div><p class="eyebrow">FIELD & RUNNERS</p><h2 id="field-heading">守備位置</h2></div>
+              <span class="field-team" id="fielding-team">主隊守備</span>
+            </div>
+            <div class="diamond-wrap">
+              <div class="basepath"></div>
+              <div class="field-position pos-cf" data-code="CF" data-position="中外野手">CF</div>
+              <div class="field-position pos-lf" data-code="LF" data-position="左外野手">LF</div>
+              <div class="field-position pos-rf" data-code="RF" data-position="右外野手">RF</div>
+              <div class="field-position pos-ss" data-code="SS" data-position="游擊手">SS</div>
+              <div class="field-position pos-2b" data-code="2B" data-position="二壘手">2B</div>
+              <div class="field-position pos-3b" data-code="3B" data-position="三壘手">3B</div>
+              <div class="field-position pos-1b" data-code="1B" data-position="一壘手">1B</div>
+              <div class="field-position pos-p" data-code="P" data-position="投手">P</div>
+              <div class="field-position pos-c" data-code="C" data-position="捕手">C</div>
+              <div class="field-base base-third"><span id="field-runner-third"></span></div>
+              <div class="field-base base-second"><span id="field-runner-second"></span></div>
+              <div class="field-base base-first"><span id="field-runner-first"></span></div>
+              <div class="home-plate"></div>
+            </div>
+          </section>
+          <section class="panel lineup-scorebook" aria-labelledby="scorebook-heading">
+            <div class="section-heading">
+              <div><p class="eyebrow">BATTING ORDER</p><h2 id="scorebook-heading">打擊順序表</h2></div>
+              <span class="field-team" id="lineup-inning"></span>
+            </div>
+            <div id="scorebook-teams" class="scorebook-teams"></div>
+          </section>
+
+        </aside>
+      </section>
+      <footer class="footer-note"><span>球場邊</span> · 比賽紀錄會自動儲存在這個瀏覽器</footer>
+    </main>
+
+    <dialog id="setup-dialog" class="setup-dialog">
+      <form id="setup-form">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">JUMP INTO THE GAME</p><h2>直接設定比賽狀態</h2></div>
+          <button class="dialog-close" id="close-setup" type="button" aria-label="關閉">×</button>
+        </div>
+        <p class="dialog-description">按下套用後，下方記分板會立即更新並新增一筆紀錄，不會覆蓋過去的逐球歷史。填寫各局得分及 H、E；R 會自動加總。目前局數會依已填局分推斷，每隊不可跳過前面局數。</p>
+        <div class="setup-scoreboard-scroll">
+          <table class="setup-scoreboard" aria-label="設定各局得分、安打與失誤">
+            <thead id="setup-score-head"></thead>
+            <tbody id="setup-score-body"></tbody>
+          </table>
+        </div>
+        <div class="form-grid">
+          <label>好球數<input name="strikes" type="number" min="0" max="2" value="0" required></label>
+          <label>壞球數<input name="balls" type="number" min="0" max="3" value="0" required></label>
+          <label>出局數<input name="outs" type="number" min="0" max="2" value="0" required></label>
+          <label>目前打者<select name="batter" required></select></label>
+        </div>
+        <fieldset class="runner-fields">
+          <legend>壘上跑者（留空代表壘包無人）</legend>
+          <label>一壘<select name="first"></select></label>
+          <label>二壘<select name="second"></select></label>
+          <label>三壘<select name="third"></select></label>
+        </fieldset>
+        <p id="setup-error" class="setup-error" role="alert" aria-live="assertive" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" id="cancel-setup" type="button">取消</button>
+          <button class="button button-primary" type="submit">套用到記分板並儲存</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="lineup-dialog" class="setup-dialog lineup-dialog">
+      <form id="lineup-form">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">GAME & STARTING LINEUPS</p><h2>比賽資訊與先發名單</h2></div>
+          <button class="dialog-close" data-close="lineup-dialog" type="button" aria-label="關閉">×</button>
+        </div>
+        <p class="dialog-description">編輯完成會新增一筆比賽紀錄。每隊可設定先發投手及 1 至 9 棒球員姓名、守備位置（DH 為指定打擊）與背號；同隊守位不可重複，守位選單不包含投手。</p>
+        <div class="form-grid game-info-fields">
+          <label>客隊名稱<input name="awayName" maxlength="24" required></label>
+          <label>主隊名稱<input name="homeName" maxlength="24" required></label>
+          <label class="game-info-wide">比賽資訊<input name="gameInfo" maxlength="50"></label>
+        </div>
+        <div class="lineup-teams">
+          <fieldset class="lineup-fieldset"><legend id="away-lineup-title">客隊先發</legend><div class="starting-pitcher"><label>先發投手<input name="awayPitcherName" maxlength="30"></label><label>背號<input name="awayPitcherNumber" maxlength="6"></label></div><div class="lineup-head"><span>棒次</span><span>球員姓名</span><span>守位</span><span>背號</span></div><div id="away-lineup"></div></fieldset>
+          <fieldset class="lineup-fieldset"><legend id="home-lineup-title">主隊先發</legend><div class="starting-pitcher"><label>先發投手<input name="homePitcherName" maxlength="30"></label><label>背號<input name="homePitcherNumber" maxlength="6"></label></div><div class="lineup-head"><span>棒次</span><span>球員姓名</span><span>守位</span><span>背號</span></div><div id="home-lineup"></div></fieldset>
+        </div>
+        <p id="lineup-error" class="lineup-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" data-close="lineup-dialog" type="button">取消</button>
+          <button class="button button-primary" type="submit">儲存比賽資訊與先發</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="substitution-dialog" class="setup-dialog">
+      <form id="substitution-form">
+        <div class="dialog-heading"><div><p class="eyebrow">LINEUP CHANGE</p><h2 id="substitution-title">更換守備</h2></div><button class="dialog-close" data-close="substitution-dialog" type="button" aria-label="關閉">×</button></div>
+        <p class="dialog-description" id="substitution-description">選擇守備位置及新球員，異動將記入逐球紀錄。</p>
+        <div class="form-grid">
+          <label id="defense-mode-field">守備異動<select name="defenseMode"><option value="replace">換下場</option><option value="swap">交換守備位置</option></select></label>
+          <label id="offense-mode-field" hidden>進攻替換<select name="offenseMode"><option value="batter">代打（替換目前打者）</option><option value="runner">代跑（替換壘上跑者）</option></select></label>
+          <label id="substitution-target-field"><span id="substitution-target-label">換下場球員</span><select name="slot"></select></label>
+          <label id="swap-player-field" hidden>另一位球員<select name="swapPlayer"></select></label>
+          <label id="incoming-name-field">新球員姓名<input name="name" maxlength="30" required></label>
+          <label id="incoming-number-field">背號<input name="number" maxlength="6" placeholder="例如：27"></label>
+        </div>
+        <div class="dialog-actions"><button class="button button-quiet" data-close="substitution-dialog" type="button">取消</button><button class="button button-primary" type="submit">記錄更換</button></div>
+      </form>
+    </dialog>
+    <dialog id="runner-dialog" class="setup-dialog runner-dialog">
+      <form id="runner-form">
+        <div class="dialog-heading"><div><p class="eyebrow">RUNNER ADVANCEMENT</p><h2 id="runner-dialog-title">輸入跑壘結果</h2></div><button class="dialog-close" data-close="runner-dialog" type="button" aria-label="關閉">×</button></div>
+        <p class="dialog-description" id="runner-dialog-description">拖曳跑者到目標壘包，也可用選單選擇壘包或出局。</p>
+        <p class="runner-error" id="runner-error" role="alert" hidden></p>
+        <div class="runner-drag-board" id="runner-board">
+          <div class="runner-pool" id="runner-pool"></div>
+          <div class="runner-destinations">
+            <div class="runner-destination" data-destination="1"><strong>一壘</strong><span></span></div>
+            <div class="runner-destination" data-destination="2"><strong>二壘</strong><span></span></div>
+            <div class="runner-destination" data-destination="3"><strong>三壘</strong><span></span></div>
+            <div class="runner-destination" data-destination="4"><strong>本壘（得分）</strong><span></span></div>
+            <div class="runner-destination runner-out" data-destination="0"><strong>出局</strong><span></span></div>
+          </div>
+        </div>
+        <div id="runner-choices" class="runner-choices"></div>
+        <div class="dialog-actions"><button class="button button-quiet" data-close="runner-dialog" type="button">取消</button><button class="button button-primary" id="runner-submit" type="submit">記錄跑壘</button></div>
+      </form>
+    </dialog>
+    <dialog id="steal-dialog" class="setup-dialog">
+      <form id="steal-form">
+        <div class="dialog-heading"><div><p class="eyebrow">STEAL ATTEMPT</p><h2>記錄盜壘</h2></div><button class="dialog-close" data-close="steal-dialog" type="button" aria-label="關閉">×</button></div>
+        <div class="form-grid">
+          <label>跑者<select name="runner"></select></label>
+        </div>
+        <div class="dialog-actions"><button class="button button-quiet" data-close="steal-dialog" type="button">取消</button><button class="button button-primary" id="runner-event-submit" type="submit">新增紀錄</button></div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
