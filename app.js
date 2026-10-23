@@ -44,7 +44,6 @@
   let selectedHalf = 'top';
   let pendingHit = '';
   let pendingDestinations = {};
-  let pendingForceOutConfirmed = false;
   let runnerEvent = 'steal';
   let substitutionMode = 'defense';
   let toastTimer;
@@ -297,8 +296,7 @@
       openRunnerDialog(play);
       return;
     }
-    if (play === 'force-out' && state.bases.some(Boolean)
-      && (state.outs < 2 || Boolean(state.bases[0]))) {
+    if (play === 'force-out' && state.outs < 2 && state.bases.some(Boolean)) {
       openRunnerDialog(play);
       return;
     }
@@ -622,76 +620,39 @@
     error.textContent = '';
     error.hidden = true;
   }
-  function batterCanReachOnForce() {
-    return pendingHit === 'force-out' && state.outs === 2 && Boolean(state.bases[0]);
-  }
   function batterIsFixedOut() {
-    return ['out', 'sacrifice'].includes(pendingHit)
-      || pendingHit === 'force-out' && !batterCanReachOnForce();
-  }
-  function updateForceOutDestinations(key, previous, destination) {
-    if (!batterCanReachOnForce()) return;
-    if (key === 'batter' && destination === 1) {
-      pendingDestinations[0] = 0;
-      pendingForceOutConfirmed = true;
-      return;
-    }
-    if (key === 'batter' && destination === 0) {
-      state.bases.forEach((runner, index) => {
-        if (runner) pendingDestinations[index] = index + 1;
-      });
-      pendingForceOutConfirmed = true;
-      return;
-    }
-    if (destination === 0) {
-      pendingDestinations.batter = 1;
-      pendingForceOutConfirmed = true;
-      const outRunnerIndex = Number(key);
-      for (let index = 0; index < outRunnerIndex; index += 1) {
-        if (state.bases[index]) pendingDestinations[index] = index + 2;
-      }
-      Object.keys(pendingDestinations)
-        .filter((runnerKey) => runnerKey !== 'batter' && runnerKey !== key
-          && Number(runnerKey) > outRunnerIndex)
-        .forEach((runnerKey) => { pendingDestinations[runnerKey] = Number(runnerKey) + 1; });
-      return;
-    }
-    if (previous === 0 && pendingDestinations.batter === 1) {
-      pendingDestinations.batter = 0;
-      Object.keys(pendingDestinations)
-        .filter((runnerKey) => runnerKey !== 'batter' && runnerKey !== key)
-        .forEach((runnerKey) => { pendingDestinations[runnerKey] = Number(runnerKey) + 1; });
-    }
+    return ['out', 'force-out', 'sacrifice'].includes(pendingHit);
   }
   function openRunnerDialog(play) {
     pendingHit = play;
-    pendingForceOutConfirmed = false;
     const hitBases = { single: 1, double: 2, triple: 3, 'home-run': 4, error: 1, 'fielder-choice': 1 }[play];
-    const batterCanReach = batterCanReachOnForce();
     const batter = batterName();
     const runners = state.bases.map((runner, index) => ({ runner, index })).filter(({ runner }) => runner);
     pendingDestinations = {};
     runners.forEach(({ index }) => {
       if (play === 'foul') pendingDestinations[index] = index + 1;
       else if (play === 'sacrifice') pendingDestinations[index] = Math.min(index + 2, 4);
+      else if (play === 'fielder-choice') pendingDestinations[index] = index + 1;
       else if (['out', 'force-out'].includes(play)) pendingDestinations[index] = index + 1;
       else pendingDestinations[index] = Math.min(index + hitBases + 1, 4);
     });
-    if (play === 'fielder-choice') pendingDestinations.batter = 1;
-    else if (hitBases) pendingDestinations.batter = hitBases === 4 ? 4 : hitBases;
+    if (play === 'fielder-choice') {
+      pendingDestinations.batter = 1;
+      const firstOccupiedBase = runners[0]?.index;
+      if (firstOccupiedBase !== undefined) pendingDestinations[firstOccupiedBase] = 0;
+    } else if (hitBases) pendingDestinations.batter = hitBases === 4 ? 4 : hitBases;
     else if (['out', 'force-out', 'sacrifice'].includes(play)) pendingDestinations.batter = 0;
     const labels = { out: '接殺出局', sacrifice: '犧牲打', 'force-out': '封殺出局', foul: '界外球', single: '一壘安打', double: '二壘安打', triple: '三壘安打', 'home-run': '全壘打', error: '失誤上壘', 'fielder-choice': '野手選擇' };
     clearRunnerError();
     $('#runner-dialog-title').textContent = '輸入跑壘結果';
-    $('#runner-dialog-description').textContent = batterCanReach
-      ? '兩人出局且一壘有人：請將打者或跑者拖曳至出局區確認封殺。'
+    $('#runner-dialog-description').textContent = play === 'fielder-choice'
+      ? '打者固定上一壘；至少選擇一位跑者出局，預設由最低壘包跑者出局。'
       : `${labels[play]}：拖曳跑者到目標位置，或使用選單；選擇出局可記錄跑者出局。`;
     $('#runner-submit').textContent = `記錄${labels[play]}`;
     $('#runner-board').hidden = false;
     $('#runner-choices').innerHTML = runners.map(({ runner, index }) =>
       runnerChoice(index, runner)).join('')
-      + (batterCanReach ? runnerChoice('batter', batter, '打者')
-        : ['single', 'double', 'triple', 'error'].includes(play) ? runnerChoice('batter', batter, '打者')
+      + (['single', 'double', 'triple', 'error'].includes(play) ? runnerChoice('batter', batter, '打者')
         : play === 'fielder-choice' ? `<div class="runner-choice batter-choice"><span>打者</span><strong>${escapeHtml(batter)}</strong><span class="fixed-destination">固定上一壘</span></div>`
         : hitBases ? `<div class="runner-choice batter-choice"><span>打者</span><strong>${escapeHtml(batter)}</strong><span class="fixed-destination">全壘打回本壘</span></div>`
         : `<div class="runner-choice batter-choice"><span>打者</span><strong>${escapeHtml(batter)}</strong><span class="fixed-destination">${play === 'sacrifice' ? '犧牲打出局' : '打者出局'}</span></div>`);
@@ -703,18 +664,14 @@
     const fixedOut = Number(batterIsFixedOut());
     const otherRunnerOuts = Object.entries(pendingDestinations)
       .filter(([key, value]) => key !== String(runnerKey) && (!fixedOut || key !== 'batter') && value === 0).length;
-    const forceOutChoicePair = batterCanReachOnForce();
-    const outUnavailable = !forceOutChoicePair && selected !== 0
-      && state.outs + fixedOut + otherRunnerOuts >= 3;
+    const outUnavailable = selected !== 0 && state.outs + fixedOut + otherRunnerOuts >= 3;
     const batterCannotBeOut = pendingHit === 'error' && String(runnerKey) === 'batter';
     const options = [`<option value="0" ${outUnavailable || batterCannotBeOut ? 'disabled' : ''}>出局</option>`];
     bases.forEach((base, index) => {
       const destination = index + 1;
       const occupiedByOther = Object.entries(pendingDestinations)
         .some(([key, value]) => key !== String(runnerKey) && value === destination);
-      const forceBatterFirst = batterCanReachOnForce() && String(runnerKey) === 'batter'
-        && destination === 1 && occupiedByOther && pendingDestinations[0] === 1;
-      const disabled = occupiedByOther && !forceBatterFirst;
+      const disabled = occupiedByOther;
       const label = destination === Number(runnerKey) + 1 ? `${base}（原壘安全）` : base;
       options.push(`<option value="${destination}" ${selected === destination ? 'selected' : ''} ${disabled ? 'disabled' : ''}>${label}${disabled ? '（已有人）' : ''}</option>`);
     });
@@ -731,9 +688,7 @@
       const key = select.name.slice('runner-'.length);
       select.value = String(pendingDestinations[key]);
       select.onchange = () => {
-        const previous = pendingDestinations[key];
         pendingDestinations[key] = Number(select.value);
-        updateForceOutDestinations(key === 'batter' ? key : String(Number(key)), previous, pendingDestinations[key]);
         clearRunnerError();
         syncRunnerSelects();
         renderRunnerDragBoard();
@@ -743,18 +698,15 @@
           const fixedOut = Number(batterIsFixedOut());
           const otherRunnerOuts = Object.entries(pendingDestinations)
             .filter(([otherKey, value]) => otherKey !== key && (!fixedOut || otherKey !== 'batter') && value === 0).length;
-          const forceOutChoicePair = batterCanReachOnForce();
           option.disabled = pendingHit === 'error' && key === 'batter'
-            || !forceOutChoicePair && pendingDestinations[key] !== 0
+            || pendingDestinations[key] !== 0
               && state.outs + fixedOut + otherRunnerOuts >= 3;
           return;
         }
         if (option.value === '4') return;
         const occupiedByOther = Object.entries(pendingDestinations)
           .some(([otherKey, value]) => otherKey !== key && value === Number(option.value));
-        const forceBatterFirst = batterCanReachOnForce() && key === 'batter'
-          && Number(option.value) === 1 && occupiedByOther && pendingDestinations[0] === 1;
-        option.disabled = occupiedByOther && !forceBatterFirst;
+        option.disabled = occupiedByOther;
         option.textContent = option.disabled
           ? `${bases[Number(option.value) - 1]}（已有人）`
           : bases[Number(option.value) - 1];
@@ -796,19 +748,16 @@
     const key = event.dataTransfer.getData('text/plain');
     const destination = Number(event.currentTarget.dataset.destination);
     const previous = pendingDestinations[key];
-    const forceOutChoicePair = batterCanReachOnForce();
     if (pendingHit === 'error' && key === 'batter' && destination === 0) {
       showRunnerError('失誤上壘時，打者不能記為出局。');
       return;
     }
-    const batterCanMoveToFirst = key === 'batter' && batterCanReachOnForce() && destination === 1;
     if (['out', 'force-out'].includes(pendingHit)
-      && key === 'batter' && destination !== 0 && !batterCanMoveToFirst) return;
+      && key === 'batter' && destination !== 0) return;
     const fixedOut = Number(batterIsFixedOut());
     const otherRunnerOuts = Object.entries(pendingDestinations)
       .filter(([otherKey, value]) => otherKey !== key && (!fixedOut || otherKey !== 'batter') && value === 0).length;
-    if (!forceOutChoicePair && destination === 0 && previous !== 0
-      && state.outs + fixedOut + otherRunnerOuts >= 3) {
+    if (destination === 0 && previous !== 0 && state.outs + fixedOut + otherRunnerOuts >= 3) {
       showRunnerError('本次結果不能超過該局剩餘出局數。');
       return;
     }
@@ -818,7 +767,6 @@
     pendingDestinations[key] = destination;
     clearRunnerError();
     if (occupant) pendingDestinations[occupant[0]] = previous;
-    if (forceOutChoicePair) updateForceOutDestinations(key, previous, destination);
     renderRunnerDragBoard();
   }
 
@@ -1216,11 +1164,6 @@
       showRunnerError('同一壘包不能安排兩位跑者，請拖曳或選擇其他壘包。');
       return;
     }
-    const batterCanReach = batterCanReachOnForce();
-    if (batterCanReach && !pendingForceOutConfirmed) {
-      showRunnerError('請將打者或跑者拖曳至出局區，確認封殺後再記錄。');
-      return;
-    }
     const fixedOut = batterIsFixedOut() ? 1 : 0;
     const runnerOuts = Object.entries(destinations)
       .filter(([key, destination]) => (!fixedOut || key !== 'batter') && destination === 0).length;
@@ -1232,18 +1175,13 @@
       showRunnerError('失誤上壘時，打者不能記為出局。');
       return;
     }
-    if (batterCanReach
-      && Number(destinations.batter === 0)
-        + Object.entries(destinations).filter(([key, destination]) => key !== 'batter' && destination === 0).length !== 1) {
-      showRunnerError('兩人出局時，打者或一位跑者必須遭封殺。');
+    if (pendingHit === 'fielder-choice'
+      && !Object.entries(destinations).some(([key, destination]) => key !== 'batter' && destination === 0)) {
+      showRunnerError('野手選擇至少要有一位跑者出局。');
       return;
     }
     if (['out', 'force-out'].includes(pendingHit)
-      && (batterCanReach
-        ? destinations.batter !== 0 && destinations.batter !== 1
-          || Object.entries(destinations).some(([key, destination]) => key !== 'batter'
-            && destination !== 0 && destination < Number(key) + 1)
-        : destinations.batter !== 0)) {
+      && destinations.batter !== 0) {
       showRunnerError('接殺出局或封殺出局時，跑者只能留在原壘或出局。');
       return;
     }
