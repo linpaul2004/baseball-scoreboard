@@ -23,7 +23,7 @@ button, input, select { font: inherit; }
 button { color: inherit; }
 .topbar { height: 70px; padding: 0 max(28px, calc((100vw - 1260px) / 2)); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #26322c; background: rgba(16, 24, 21, .84); }
 .brand { display: flex; align-items: center; gap: 10px; color: #edf2e9; text-decoration: none; font-weight: 800; letter-spacing: .04em; }
-.brand-mark { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-size: 16px; }
+.brand-mark { display: block; width: 30px; height: 30px; border-radius: 9px; }
 .topbar-actions { display: flex; align-items: center; gap: 9px; }
 .live-label, .eyebrow, .keyboard-hint, .count-label, .count-line b, .count-letter, .out-group strong small, .inning-indicator, .action-group h3, .play-button > span, .field-position, .field-team, .footer-note, .log-stats, .half-inning-tag { font-family: var(--mono); }
 .live-label { display: flex; align-items: center; gap: 8px; margin-right: 14px; color: #8fa093; font-size: 10px; letter-spacing: .08em; }
@@ -170,6 +170,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .form-grid label, .runner-fields label { display: grid; gap: 6px; color: #aebbad; font-size: 10px; }
 .form-grid input, .form-grid select, .runner-fields input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #35463b; border-radius: 7px; outline: 0; background: #111a15; color: #e5ebe2; font-size: 12px; }
+.substitution-target-value { display: flex; min-height: 38px; align-items: center; border: 1px solid #35463b; border-radius: 7px; padding: 0 10px; background: #111a15; color: #e5ebe2; font-size: 12px; font-weight: 500; }
 .form-grid input:focus, .form-grid select:focus, .runner-fields input:focus { border-color: #8db554; }
 .runner-fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 0; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .runner-fields legend { padding: 0 6px; color: #aebbad; font-size: 10px; }
@@ -230,6 +231,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .out-group strong small, .pitcher-count small { font-size: 11px; }
 .pitcher-count { min-width: 120px; color: #e8eee5; }
 .pitcher-count > strong { font-size: 19px; }
+.pitch-count-divider { margin: 0 5px; color: var(--muted); font-size: 13px; }
 .action-group h3 { font-size: 13px; }
 .play-button { min-height: 54px; font-size: 14px; }
 .play-button > span { font-size: 10px; }

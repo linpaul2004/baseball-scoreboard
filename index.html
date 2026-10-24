@@ -12,12 +12,13 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#" aria-label="球場邊首頁"><span class="brand-mark">球</span>球場邊</a>
+      <a class="brand" href="#" aria-label="球場邊首頁"><img class="brand-mark" src="favicon.svg" alt="">球場邊</a>
       <div class="topbar-actions">
         <span class="live-label"><span></span> LIVE SCORING</span>
         <button class="button button-quiet" id="lineup-button" type="button">比賽資訊／先發名單</button>
         <button class="button button-quiet" id="defense-change-button" type="button">更換守備</button>
-        <button class="button button-quiet" id="pinch-hit-button" type="button">代打／代跑</button>
+        <button class="button button-quiet" id="pinch-hit-button" type="button">代打</button>
+        <button class="button button-quiet" id="pinch-run-button" type="button">代跑</button>
         <button class="button button-quiet" id="setup-button" type="button">直接設定</button>
         <button class="button button-quiet" id="new-game-button" type="button">重設比賽</button>
       </div>
@@ -65,8 +66,8 @@
                 <strong><span id="out-count">0</span><small> OUT</small></strong>
               </div>
               <div class="pitcher-count">
-                <span class="count-label">用球數</span>
-                <strong id="pitch-count">0</strong><small> 球</small>
+                <span class="count-label">用球數／總用球數</span>
+                <strong id="at-bat-pitch-count">0</strong><span class="pitch-count-divider">／</span><strong id="pitch-count">0</strong><small> 球</small>
               </div>
             </div>
             <div class="batter-history">
@@ -136,8 +137,8 @@
                 <button class="button button-quiet" id="next-inning" type="button" aria-label="下一局">›</button>
               </div>
               <div class="history-actions">
-                <button class="button button-quiet" id="export-button" type="button">匯出比賽紀錄</button>
-                <button class="button button-quiet" id="import-button" type="button">讀取比賽紀錄</button>
+                <button class="button button-quiet" id="export-button" type="button">匯出逐球紀錄</button>
+                <button class="button button-quiet" id="import-button" type="button">讀取逐球紀錄</button>
                 <input id="import-file" type="file" accept=".txt,.json,.jsonl,application/json,text/plain" hidden>
               </div>
             </div>
@@ -180,7 +181,7 @@
 
         </aside>
       </section>
-      <footer class="footer-note"><span>球場邊</span> · 比賽紀錄會自動儲存在這個瀏覽器</footer>
+      <footer class="footer-note"><span>v1.2.0</span> · 紀錄會自動儲存在這個瀏覽器</footer>
     </main>
 
     <dialog id="setup-dialog" class="setup-dialog">
@@ -221,7 +222,7 @@
           <div><p class="eyebrow">GAME & STARTING LINEUPS</p><h2>比賽資訊與先發名單</h2></div>
           <button class="dialog-close" data-close="lineup-dialog" type="button" aria-label="關閉">×</button>
         </div>
-        <p class="dialog-description">編輯完成會新增一筆比賽紀錄。每隊可設定先發投手及 1 至 9 棒球員姓名、守備位置（DH 為指定打擊）與背號；同隊守位不可重複，守位選單不包含投手。</p>
+        <p class="dialog-description">編輯完成會新增一筆紀錄。每隊可設定先發投手及 1 至 9 棒球員姓名、守備位置（DH 為指定打擊）與背號；同隊守位不可重複，守位選單不包含投手。</p>
         <div class="form-grid game-info-fields">
           <label>客隊名稱<input name="awayName" maxlength="24" required></label>
           <label>主隊名稱<input name="homeName" maxlength="24" required></label>
@@ -244,8 +245,7 @@
         <p class="dialog-description" id="substitution-description">選擇守備位置及新球員，異動將記入逐球紀錄。</p>
         <div class="form-grid">
           <label id="defense-mode-field">守備異動<select name="defenseMode"><option value="replace">換下場</option><option value="swap">交換守備位置</option></select></label>
-          <label id="offense-mode-field" hidden>進攻替換<select name="offenseMode"><option value="batter">代打（替換目前打者）</option><option value="runner">代跑（替換壘上跑者）</option></select></label>
-          <label id="substitution-target-field"><span id="substitution-target-label">換下場球員</span><select name="slot"></select></label>
+          <label id="substitution-target-field"><span id="substitution-target-label">換下場球員</span><select name="slot"></select><strong id="substitution-target-value" class="substitution-target-value" hidden></strong></label>
           <label id="swap-player-field" hidden>另一位球員<select name="swapPlayer"></select></label>
           <label id="incoming-name-field">新球員姓名<input name="name" maxlength="30" required></label>
           <label id="incoming-number-field">背號<input name="number" maxlength="6" placeholder="例如：27"></label>
@@ -278,6 +278,7 @@
         <div class="form-grid">
           <label>跑者<select name="runner"></select></label>
         </div>
+        <p class="runner-error" id="steal-error" role="alert" aria-live="assertive" hidden></p>
         <div class="dialog-actions"><button class="button button-quiet" data-close="steal-dialog" type="button">取消</button><button class="button button-primary" id="runner-event-submit" type="submit">新增紀錄</button></div>
       </form>
     </dialog>

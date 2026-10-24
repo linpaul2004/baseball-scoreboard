@@ -34,6 +34,7 @@
     ],
     gameInfo: '',
     inning: 1, half: 'top', gameOver: false, walkOff: false, balls: 0, strikes: 0, outs: 0,
+    batterPitchCount: 0,
     bases: [null, null, null], batter: '', batterOverride: false, batterNumber: 1, orderIndexes: [0, 0],
     pitcherCounts: {}, plateAppearances: {}
   });
@@ -110,6 +111,7 @@
     migrated.balls ??= 0;
     migrated.strikes ??= 0;
     migrated.outs ??= 0;
+    migrated.batterPitchCount ??= 0;
     migrated.bases ||= [null, null, null];
     migrated.batterNumber ||= 1;
     migrated.batterOverride ??= false;
@@ -120,7 +122,7 @@
   function replay(allRecords, through = allRecords.length) {
     let replayed = defaultState();
     for (const record of allRecords.slice(0, through)) {
-      if (!record || !record.state || typeof record.label !== 'string') throw new Error('比賽紀錄包含無效資料');
+      if (!record || !record.state || typeof record.label !== 'string') throw new Error('逐球紀錄包含無效資料');
       replayed = migrateState(record.state);
     }
     return replayed;
@@ -151,7 +153,7 @@
       cursor = Math.max(0, Math.min(data.cursor, records.length));
       state = cursor ? replay(records, cursor) : defaultState();
     } catch (error) {
-      console.error('無法讀取已儲存的比賽紀錄。', error);
+      console.error('無法讀取已儲存的逐球紀錄。', error);
       localStorage.removeItem(STORAGE_KEY);
       records = [];
       cursor = 0;
@@ -164,7 +166,7 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, cursor }));
     } catch (error) {
-      console.error('無法儲存比賽紀錄。', error);
+      console.error('無法儲存逐球紀錄。', error);
       showToast('儲存失敗，請檢查瀏覽器儲存空間。');
     }
     render();
@@ -175,12 +177,16 @@
     const location = type === 'setup' ? nextState : state;
     const batter = activeBatter(state);
     const pitcher = currentPitcher(state);
+    const pitchNumber = pitcher
+      && (nextState.pitcherCounts[pitcher.id] || 0) === (state.pitcherCounts[pitcher.id] || 0) + 1
+      ? nextState.pitcherCounts[pitcher.id] : null;
     const outs = nextState.endedWithThreeOuts ? 3 : nextState.outs;
     const endingBases = nextState.endedWithThreeOuts ? nextState.endedWithThreeOutsBases : null;
     delete nextState.endedWithThreeOuts;
     delete nextState.endedWithThreeOutsBases;
     records.push({
       label, type, outs, ...(endingBases ? { bases: endingBases } : {}),
+      ...(pitchNumber ? { pitchNumber } : {}),
       state: clone(nextState), inning: location.inning, half: location.half,
       batter: batter ? { name: batter.name, number: batter.number, position: batter.position } : null,
       pitcher: pitcher ? { name: pitcher.name, number: pitcher.number, position: pitcher.position } : null
@@ -195,6 +201,7 @@
   }
 
   function nextBatter(gameState) {
+    gameState.batterPitchCount = 0;
     const team = activeTeamIndex(gameState);
     gameState.orderIndexes[team] = (gameState.orderIndexes[team] + 1) % 9;
     gameState.batterNumber = gameState.orderIndexes[team] + 1;
@@ -222,6 +229,7 @@
   }
   function advanceHalfInning(gameState) {
     if (gameState.gameOver) return;
+    gameState.batterPitchCount = 0;
     gameState.endedWithThreeOuts = true;
     gameState.endedWithThreeOutsBases = [...gameState.bases];
     gameState.outs = 0;
@@ -273,6 +281,7 @@
   function countPitch(gameState) {
     const pitcher = currentPitcher(gameState);
     if (pitcher) gameState.pitcherCounts[pitcher.id] = (gameState.pitcherCounts[pitcher.id] || 0) + 1;
+    gameState.batterPitchCount += 1;
   }
   function actualPitch(play) {
     return !['intentional-walk', 'timeout-ball', 'timeout-strike', 'steal', 'pickoff'].includes(play);
@@ -514,13 +523,16 @@
       const position = index + 1;
       const batter = record.batter
         ? `打者 ${displayPlayerName(record.batter)} #${record.batter.number} ${record.batter.position}` : '';
+      const pitcherName = String(record.pitcher?.name || '').trim();
       const pitcher = record.pitcher
-        ? `投手 ${displayPlayerName(record.pitcher)} #${record.pitcher.number} ${record.pitcher.position}` : '';
+        ? `投手 ${pitcherName || '球員'} #${record.pitcher.number}${record.pitchNumber ? ` 第${record.pitchNumber}球` : ''}` : '';
       const runnerStatus = (record.bases || record.state.bases || []).map((runner, baseIndex) =>
         runner ? `${bases[baseIndex]} ${runner}` : '').filter(Boolean);
-      const runnerSummary = runnerStatus.length ? `壘上：${runnerStatus.join('、')}` : '壘上：無';
       const outs = record.outs ?? (record.state.outs === 0
         && (record.state.inning !== record.inning || record.state.half !== record.half) ? 3 : record.state.outs);
+      const runnerSummary = outs >= 3
+        ? (runnerStatus.length ? `殘壘：${runnerStatus.join('、')}` : '無殘壘')
+        : (runnerStatus.length ? runnerStatus.join('、') : '壘上無人');
       return `<li class="record-item"><div class="record-entry"><span class="record-number">${String(position).padStart(2, '0')}</span><div class="record-content"><span class="record-label">${escapeHtml(record.label)}</span><span class="record-people">${escapeHtml([batter, pitcher].filter(Boolean).join(' · ') || '比賽狀態設定')}</span><span class="record-runners">${escapeHtml(runnerSummary)}</span></div><span class="record-meta">${record.state.balls}-${record.state.strikes} · ${outs} 出局</span></div></li>`;
     }).join('');
     $('#history-help').textContent = `顯示 ${halfLabel(selectedInning, selectedHalf)}；紀錄可在此區域捲動閱讀。`;
@@ -556,6 +568,7 @@
     document.querySelector('[data-play="steal"]').disabled = state.gameOver || !hasRunners;
     document.querySelector('[data-play="pickoff"]').disabled = state.gameOver || !hasRunners;
     const pitcher = currentPitcher();
+    $('#at-bat-pitch-count').textContent = state.batterPitchCount;
     $('#pitch-count').textContent = pitcher ? state.pitcherCounts[pitcher.id] || 0 : 0;
     ['first', 'second', 'third'].forEach((base, index) => {
       const runner = state.bases[index];
@@ -952,6 +965,8 @@
     next.orderIndexes[battingTeam] = Number(data.get('batter'));
     next.batterNumber = next.orderIndexes[battingTeam] + 1;
     next.batter = next.teams[battingTeam].lineup[next.orderIndexes[battingTeam]].name;
+    if (state.batterOverride || battingTeam !== activeTeamIndex(state)
+      || next.orderIndexes[battingTeam] !== state.orderIndexes[battingTeam]) next.batterPitchCount = 0;
     next.batterOverride = false;
     addRecord('直接設定比賽狀態', next, 'setup');
     setupDialog.close();
@@ -1014,47 +1029,48 @@
 
   const substitutionDialog = $('#substitution-dialog');
   function openSubstitution(mode) {
+    if (mode === 'runner' && !state.bases.some(Boolean)) {
+      showToast('目前壘上沒有跑者。');
+      return;
+    }
     substitutionMode = mode;
     const form = $('#substitution-form');
-    $('#substitution-title').textContent = mode === 'defense' ? '更換守備' : '代打／代跑';
+    $('#substitution-title').textContent = mode === 'defense' ? '更換守備' : mode === 'batter' ? '代打' : '代跑';
     $('#substitution-description').textContent = mode === 'defense'
       ? '換下場或交換守備位置。'
-      : '選擇替換目前打者或壘上跑者；新球員會接替其打序與守備位置。';
+      : mode === 'batter' ? '新球員會接替目前打者的打序與守備位置。' : '選擇壘上跑者並由新球員替換。';
     $('#defense-mode-field').hidden = mode !== 'defense';
-    $('#offense-mode-field').hidden = mode !== 'offense';
     $('#substitution-target-field').hidden = false;
     $('#substitution-target-label').textContent = '換下場球員';
     form.elements.defenseMode.value = 'replace';
-    form.elements.offenseMode.value = 'batter';
     form.elements.name.value = '';
     form.elements.number.value = '';
     updateSubstitutionSlots();
     substitutionDialog.showModal();
   }
   $('#defense-change-button').addEventListener('click', () => openSubstitution('defense'));
-  $('#pinch-hit-button').addEventListener('click', () => openSubstitution('offense'));
+  $('#pinch-hit-button').addEventListener('click', () => openSubstitution('batter'));
+  $('#pinch-run-button').addEventListener('click', () => openSubstitution('runner'));
   $('#substitution-form').elements.defenseMode.addEventListener('change', updateSubstitutionSlots);
-  $('#substitution-form').elements.offenseMode.addEventListener('change', updateSubstitutionSlots);
   function updateSubstitutionSlots() {
     const form = $('#substitution-form');
     const teamIndex = substitutionMode === 'defense' ? fieldingTeamIndex() : activeTeamIndex();
     const team = state.teams[teamIndex];
     const previousSlot = form.elements.slot.value;
     const defenseMode = form.elements.defenseMode.value;
-    const offenseMode = form.elements.offenseMode.value;
     const currentBatterIndex = state.orderIndexes[activeTeamIndex()];
     const available = team.lineup.map((player, index) => ({ player, index }))
       .filter(({ player, index }) => substitutionMode === 'defense'
         ? player.position !== 'DH' && player.position !== 'P'
-        : offenseMode === 'batter' ? index === currentBatterIndex : false);
+        : substitutionMode === 'batter' ? index === currentBatterIndex : false);
     const options = available.map(({ player, index }) => substitutionMode === 'defense'
       ? `<option value="${index}">${escapeHtml(player.position === 'PH' ? player.previousPosition || 'PH' : player.position)} · ${escapeHtml(player.name)} #${escapeHtml(player.number)}</option>`
       : `<option value="${index}">${index + 1} 棒 · ${escapeHtml(displayPlayerName(player))} (${escapeHtml(player.position)})</option>`).join('');
-    const runnerOptions = offenseMode === 'runner'
+    const runnerOptions = substitutionMode === 'runner'
       ? state.bases.map((runner, index) => runner
         ? `<option value="runner:${index}">${bases[index]} · ${escapeHtml(runner)}</option>` : '').join('')
       : '';
-    form.elements.slot.innerHTML = substitutionMode === 'offense' && offenseMode === 'runner'
+    form.elements.slot.innerHTML = substitutionMode === 'runner'
       ? runnerOptions
       : substitutionMode === 'defense' && defenseMode === 'replace'
       ? `<option value="pitcher">P · ${escapeHtml(displayPlayerName(team.pitcher))} #${escapeHtml(team.pitcher.number)}</option>${options}`
@@ -1066,8 +1082,16 @@
       .map(({ player, index }) => `<option value="${index}">${escapeHtml(player.position)} · ${escapeHtml(displayPlayerName(player))} #${escapeHtml(player.number)}</option>`).join('');
     const swapping = substitutionMode === 'defense' && defenseMode === 'swap';
     $('#substitution-target-label').textContent = swapping ? '交換球員'
-      : substitutionMode === 'offense' && offenseMode === 'batter' ? '被替換打者'
-        : substitutionMode === 'offense' ? '被替換跑者' : '換下場球員';
+      : substitutionMode === 'batter' ? '被替換打者'
+        : substitutionMode === 'runner' ? '被替換跑者' : '換下場球員';
+    const fixedBatterTarget = substitutionMode === 'batter';
+    form.elements.slot.hidden = fixedBatterTarget;
+    const targetValue = $('#substitution-target-value');
+    targetValue.hidden = !fixedBatterTarget;
+    if (fixedBatterTarget) {
+      const player = team.lineup[currentBatterIndex];
+      targetValue.textContent = `${currentBatterIndex + 1} 棒 · ${displayPlayerName(player)} (${player.position})`;
+    }
     $('#swap-player-field').hidden = !swapping;
     $('#substitution-target-field').hidden = false;
     $('#incoming-name-field').hidden = swapping;
@@ -1081,13 +1105,12 @@
     const next = clone(state);
     const teamIndex = substitutionMode === 'defense' ? fieldingTeamIndex(next) : activeTeamIndex(next);
     const team = next.teams[teamIndex];
-    const offenseMode = String(data.get('offenseMode'));
     const selectedSlot = String(data.get('slot'));
     let runnerBaseIndex = -1;
     let slot = selectedSlot;
-    if (substitutionMode === 'offense' && offenseMode === 'batter') {
+    if (substitutionMode === 'batter') {
       slot = String(next.orderIndexes[teamIndex]);
-    } else if (substitutionMode === 'offense' && offenseMode === 'runner') {
+    } else if (substitutionMode === 'runner') {
       runnerBaseIndex = Number(selectedSlot.replace('runner:', ''));
       const runner = next.bases[runnerBaseIndex];
       const matchingSlots = team.lineup
@@ -1119,7 +1142,7 @@
       delete team.lineup[otherIndex].previousPosition;
       addRecord(`${team.name}交換守備位置：${team.lineup[index].name} (${secondPosition}) ↔ ${team.lineup[otherIndex].name} (${firstPosition})`, next, 'setup');
       substitutionDialog.close();
-      showToast('守備位置交換已記入比賽紀錄。');
+      showToast('守備位置交換已記入。');
       return;
     }
     const outgoing = isPitcher ? team.pitcher : team.lineup[index];
@@ -1130,23 +1153,23 @@
       id: `SUB-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       name: String(data.get('name')).trim(),
       number: String(data.get('number')).trim(),
-      position: substitutionMode === 'offense' && offenseMode === 'batter' ? 'PH' : position,
-      ...(substitutionMode === 'offense' && offenseMode === 'batter' ? { previousPosition: position } : {})
+      position: substitutionMode === 'batter' ? 'PH' : position,
+      ...(substitutionMode === 'batter' ? { previousPosition: position } : {})
     };
     if (isPitcher) team.pitcher = incoming;
     else team.lineup[index] = incoming;
     if (runnerBaseIndex >= 0) next.bases[runnerBaseIndex] = incoming.name;
-    if (substitutionMode === 'offense' && offenseMode === 'batter' && next.batterOverride) {
+    if (substitutionMode === 'batter' && next.batterOverride) {
       next.batter = incoming.name;
     }
     const label = substitutionMode === 'defense'
       ? `${team.name}更換守備 ${position}：${outgoing.name} → ${incoming.name}`
-      : offenseMode === 'runner'
+      : substitutionMode === 'runner'
         ? `${team.name}更換代跑 ${bases[runnerBaseIndex]}：${outgoing.name} → ${incoming.name}`
         : `${team.name}更換代打 ${index + 1} 棒：${outgoing.name} → ${incoming.name}`;
     addRecord(label, next, 'setup');
     substitutionDialog.close();
-    showToast('球員更換已記入比賽紀錄。');
+    showToast('球員更換已記入。');
   });
 
   $('#runner-form').addEventListener('submit', (event) => {
@@ -1191,12 +1214,18 @@
   });
 
   const stealDialog = $('#steal-dialog');
+  function clearStealError() {
+    const error = $('#steal-error');
+    error.textContent = '';
+    error.hidden = true;
+  }
   function openRunnerEventDialog(eventType) {
     runnerEvent = eventType;
     const runnerSelect = $('#steal-form').elements.runner;
     runnerSelect.innerHTML = state.bases.map((runner, index) => runner
       ? `<option value="${index}">${bases[index]} · ${escapeHtml(runner)}</option>` : '').join('');
     if (!state.bases.some(Boolean)) { showToast('目前壘上沒有跑者。'); return; }
+    clearStealError();
     const pickoff = eventType === 'pickoff';
     $('#steal-dialog h2').textContent = pickoff ? '記錄牽制出局' : '記錄盜壘成功';
     $('#runner-event-submit').textContent = pickoff ? '記錄牽制出局' : '記錄盜壘成功';
@@ -1208,8 +1237,9 @@
     const baseIndex = Number(data.get('runner'));
     const runner = state.bases[baseIndex];
     if (!runner) {
-      showToast('所選壘包上已沒有跑者，請重新選擇。');
-      stealDialog.close();
+      const error = $('#steal-error');
+      error.textContent = '所選壘包上已沒有跑者，請重新選擇。';
+      error.hidden = false;
       return;
     }
     const next = clone(state);
@@ -1225,7 +1255,9 @@
         next.bases[baseIndex] = null;
         scoreRun(next, activeTeamIndex(next));
       } else if (next.bases[destination]) {
-        showToast('目標壘包已有跑者，請先處理跑者位置。');
+        const error = $('#steal-error');
+        error.textContent = '目標壘包已有跑者，請先處理該跑者位置。';
+        error.hidden = false;
         return;
       } else {
         next.bases[destination] = runner;
@@ -1235,6 +1267,7 @@
     }
     stealDialog.close();
   });
+  $('#steal-form').elements.runner.addEventListener('change', clearStealError);
 
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
   $('#export-button').addEventListener('click', () => {
