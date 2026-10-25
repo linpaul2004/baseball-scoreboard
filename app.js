@@ -1,5 +1,5 @@
 (() => {
-  const STORAGE_KEY = 'ballpark-scoreboard-v1';
+  const STORAGE_KEY = 'ballpark-scoreboard-v4';
   const positions = [
     ['P', '投手'], ['C', '捕手'], ['1B', '一壘手'], ['2B', '二壘手'], ['3B', '三壘手'],
     ['SS', '游擊手'], ['LF', '左外野手'], ['CF', '中外野手'], ['RF', '右外野手'], ['DH', '指定打擊']
@@ -7,11 +7,11 @@
   const lineupPositions = positions.filter(([code]) => code !== 'P');
   const bases = ['一壘', '二壘', '三壘'];
   const playLabels = {
-    'swinging-strike': '揮棒落空，好球', 'called-strike': '好球未揮棒', ball: '壞球',
-    'foul-tip': '擦棒被捕，好球', 'uncaught-third-strike': '不死三振，打者上一壘',
-    hbp: '觸身球，打者上一壘', foul: '界外球', out: '接殺出局',
+    'swinging-strike': '揮棒落空', 'called-strike': '好球未揮棒', ball: '壞球',
+    'foul-tip': '擦棒被捕', 'uncaught-third-strike': '不死三振',
+    hbp: '觸身球', foul: '界外球', out: '接殺出局',
     single: '一壘安打', double: '二壘安打', triple: '三壘安打',
-    'home-run': '全壘打', error: '守備失誤，打者上一壘', 'fielder-choice': '野手選擇',
+    'home-run': '全壘打', error: '守備失誤', 'fielder-choice': '野手選擇',
     'intentional-walk': '故意四壞',
     'timeout-ball': '超時壞球', 'timeout-strike': '超時好球',
     sacrifice: '犧牲打', 'force-out': '封殺出局', pickoff: '牽制出局'
@@ -73,73 +73,29 @@
     return team.innings.reduce((sum, score) => sum + (score ?? 0), 0);
   }
 
-  function migrateState(saved) {
-    const migrated = clone(saved);
-    const defaults = defaultState();
-    migrated.teams = defaults.teams.map((team, index) => {
-      const old = migrated.teams?.[index] || {};
-      let lineup = old.lineup;
-      if (!Array.isArray(lineup) || lineup.length !== 9) {
-        const oldDefense = migrated.defenses?.[index] || {};
-        lineup = defaults.teams[index].lineup.map((player) => ({
-          ...player,
-          name: oldDefense[positions.find(([, label]) => label === player.position)?.[1]] || player.name
-        }));
+  function normalizeRecords(source) {
+    for (const record of source) {
+      if (!record || !record.event || typeof record.event.type !== 'string'
+        || typeof record.event.code !== 'string' || Object.keys(record).length !== 1) {
+        throw new Error('逐球紀錄內容不完整。');
       }
-      const legacyPitcherSource = old.pitcher || lineup.find((player) => player.position === 'P') || {
-        ...team.pitcher,
-        name: migrated.defenses?.[index]?.投手 || team.pitcher.name
-      };
-      const legacyPitcher = { ...legacyPitcherSource, position: 'P' };
-      if (legacyPitcher) {
-        const battingPitcherIndex = lineup.findIndex((player) => player.id === legacyPitcher.id && player.position === 'P');
-        if (battingPitcherIndex >= 0) lineup[battingPitcherIndex].position = 'DH';
-      }
-      return {
-        ...team, ...old, name: old.name || team.name, innings: old.innings || team.innings,
-        lineup, pitcher: legacyPitcher || team.pitcher, bench: old.bench || []
-      };
-    });
-    migrated.gameInfo ??= defaults.gameInfo;
-    migrated.pitcherCounts ||= {};
-    migrated.plateAppearances ||= {};
-    migrated.orderIndexes ||= [0, 0];
-    migrated.inning ||= 1;
-    migrated.half ||= 'top';
-    migrated.gameOver ??= false;
-    migrated.walkOff ??= false;
-    migrated.balls ??= 0;
-    migrated.strikes ??= 0;
-    migrated.outs ??= 0;
-    migrated.batterPitchCount ??= 0;
-    migrated.bases ||= [null, null, null];
-    migrated.batterNumber ||= 1;
-    migrated.batterOverride ??= false;
-    migrated.orderIndexes = migrated.orderIndexes.map((index) => Number.isInteger(index) ? index % 9 : 0);
-    return migrated;
+    }
+    return source;
   }
 
   function replay(allRecords, through = allRecords.length) {
     let replayed = defaultState();
     for (const record of allRecords.slice(0, through)) {
-      if (!record || !record.state || typeof record.label !== 'string') throw new Error('逐球紀錄包含無效資料');
-      replayed = migrateState(record.state);
+      if (!record || !record.event) throw new Error('逐球紀錄包含無效資料');
+      replayed = applyEvent(replayed, record.event);
     }
     return replayed;
   }
-  function enrichRecordPeople(allRecords) {
-    let previous = defaultState();
-    return allRecords.map((record) => {
-      const batter = activeBatter(previous);
-      const pitcher = currentPitcher(previous);
-      const enriched = {
-        ...record,
-        batter: record.batter || (batter ? { ...batter } : null),
-        pitcher: record.pitcher || (pitcher ? { ...pitcher } : null),
-        state: migrateState(record.state)
-      };
-      previous = enriched.state;
-      return enriched;
+  function statesAfterRecords(allRecords, through) {
+    let current = defaultState();
+    return allRecords.slice(0, through).map((record) => {
+      current = applyEvent(current, record.event);
+      return current;
     });
   }
 
@@ -148,8 +104,10 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
       const data = JSON.parse(saved);
-      if (!Array.isArray(data.records) || !Number.isInteger(data.cursor)) throw new Error('存檔資料格式不正確');
-      records = enrichRecordPeople(data.records);
+      if (data.format !== 'ballpark-scoreboard-v4' || !Array.isArray(data.records) || !Number.isInteger(data.cursor)) {
+        throw new Error('存檔資料格式不正確');
+      }
+      records = normalizeRecords(data.records);
       cursor = Math.max(0, Math.min(data.cursor, records.length));
       state = cursor ? replay(records, cursor) : defaultState();
     } catch (error) {
@@ -164,7 +122,7 @@
 
   function saveAndRender() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, cursor }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: 'ballpark-scoreboard-v4', records, cursor }));
     } catch (error) {
       console.error('無法儲存逐球紀錄。', error);
       showToast('儲存失敗，請檢查瀏覽器儲存空間。');
@@ -172,27 +130,15 @@
     render();
   }
 
-  function addRecord(label, nextState, type = 'play') {
+  function addRecord(event) {
     records = records.slice(0, cursor);
-    const location = type === 'setup' ? nextState : state;
-    const batter = activeBatter(state);
-    const pitcher = currentPitcher(state);
-    const pitchNumber = pitcher
-      && (nextState.pitcherCounts[pitcher.id] || 0) === (state.pitcherCounts[pitcher.id] || 0) + 1
-      ? nextState.pitcherCounts[pitcher.id] : null;
-    const outs = nextState.endedWithThreeOuts ? 3 : nextState.outs;
-    const endingBases = nextState.endedWithThreeOuts ? nextState.endedWithThreeOutsBases : null;
-    delete nextState.endedWithThreeOuts;
-    delete nextState.endedWithThreeOutsBases;
-    records.push({
-      label, type, outs, ...(endingBases ? { bases: endingBases } : {}),
-      ...(pitchNumber ? { pitchNumber } : {}),
-      state: clone(nextState), inning: location.inning, half: location.half,
-      batter: batter ? { name: batter.name, number: batter.number, position: batter.position } : null,
-      pitcher: pitcher ? { name: pitcher.name, number: pitcher.number, position: pitcher.position } : null
-    });
+    const previous = state;
+    const nextState = applyEvent(previous, event);
+    if (nextState === previous) return;
+    records.push({ event: clone(event) });
     cursor = records.length;
     state = nextState;
+    const location = event.type === 'setup' && event.code === 'set-game-state' ? nextState : previous;
     selectedInning = location.inning;
     selectedHalf = location.half;
     saveAndRender();
@@ -229,9 +175,8 @@
   }
   function advanceHalfInning(gameState) {
     if (gameState.gameOver) return;
+    gameState._endingBases = [...gameState.bases];
     gameState.batterPitchCount = 0;
-    gameState.endedWithThreeOuts = true;
-    gameState.endedWithThreeOutsBases = [...gameState.bases];
     gameState.outs = 0;
     gameState.bases = [null, null, null];
     clearCount(gameState);
@@ -324,12 +269,14 @@
     applyPlay(play);
   }
   function applyPlay(play, runnerDestinations) {
-    if (state.gameOver) return;
-    const next = clone(state);
+    addRecord({ type: 'play', code: play, ...(runnerDestinations ? { runnerDestinations } : {}) });
+  }
+  function applyPlayState(gameState, play, runnerDestinations) {
+    if (gameState.gameOver) return gameState;
+    const next = clone(gameState);
     const offense = activeTeamIndex(next);
     const defense = fieldingTeamIndex(next);
     const batter = batterName(next);
-    let label = playLabels[play];
     if (actualPitch(play)) countPitch(next);
 
     if (play === 'swinging-strike' || play === 'foul-tip' || play === 'called-strike' || play === 'foul' || play === 'timeout-strike') {
@@ -353,7 +300,6 @@
         awardWalk(next, offense);
         clearCount(next);
         nextBatter(next);
-        label = '壞球累計四球，打者保送';
       }
     } else if (play === 'uncaught-third-strike') {
       next.strikes += 1;
@@ -406,7 +352,7 @@
       if (runnerOuts) recordRunnerOuts(next, runnerOuts);
     } else {
       const hitBases = { single: 1, double: 2, triple: 3, 'home-run': 4 }[play];
-      if (!hitBases) return;
+      if (!hitBases) return gameState;
       next.teams[offense].hits += 1;
       recordAppearance(next, activeBatter(next), playLabels[play]);
       const runnerOuts = Object.values(runnerDestinations || {}).filter((destination) => destination === 0).length;
@@ -415,7 +361,7 @@
       nextBatter(next);
       if (runnerOuts) recordRunnerOuts(next, runnerOuts);
     }
-    addRecord(label, next);
+    return next;
   }
   function moveRunners(gameState, destinations, teamIndex) {
     let outs = 0;
@@ -451,6 +397,108 @@
     if (batterDestination === 0) return;
     if (batterDestination === 4) scoreRun(gameState, teamIndex);
     else gameState.bases[batterDestination - 1] = batter;
+  }
+
+  function applyEvent(previous, event) {
+    if (!event || typeof event.type !== 'string' || typeof event.code !== 'string') {
+      throw new Error('逐球紀錄包含無效事件。');
+    }
+    if (event.type === 'play') {
+      if (!Object.hasOwn(playLabels, event.code)) throw new Error(`不支援的比賽事件：${event.code}`);
+      return applyPlayState(previous, event.code, event.runnerDestinations);
+    }
+    if (event.type === 'runner') {
+      const next = clone(previous);
+      if (event.code === 'steal') {
+        if (!Number.isInteger(event.from) || event.from < 0 || event.from > 2
+          || !Number.isInteger(event.to) || event.to !== event.from + 1 || !next.bases[event.from]) {
+          throw new Error('逐球紀錄包含無效盜壘事件。');
+        }
+        if (event.to > 2) {
+          next.bases[event.from] = null;
+          scoreRun(next, activeTeamIndex(next));
+        } else {
+          if (next.bases[event.to]) throw new Error('盜壘事件的目標壘包已有跑者。');
+          next.bases[event.to] = next.bases[event.from];
+          next.bases[event.from] = null;
+        }
+      } else if (event.code === 'pickoff') {
+        if (!Number.isInteger(event.base) || event.base < 0 || event.base > 2 || !next.bases[event.base]) {
+          throw new Error('逐球紀錄包含無效牽制事件。');
+        }
+        next.bases[event.base] = null;
+        next.outs += 1;
+        if (next.outs >= 3) advanceHalfInning(next);
+      } else {
+        throw new Error(`不支援的跑壘事件：${event.code}`);
+      }
+      return next;
+    }
+    if (event.type === 'setup' && event.code === 'set-roster') {
+      if (!Array.isArray(event.teams) || event.teams.length !== 2) throw new Error('名單設定事件格式不正確。');
+      const next = clone(previous);
+      next.teams = next.teams.map((team, index) => ({
+        ...team,
+        name: event.teams[index].name,
+        lineup: clone(event.teams[index].lineup),
+        pitcher: clone(event.teams[index].pitcher)
+      }));
+      next.gameInfo = event.gameInfo;
+      if (!next.batterOverride) next.batter = batterName(next);
+      return next;
+    }
+    if (event.type === 'setup' && event.code === 'set-game-state') {
+      const next = clone(previous);
+      next.balls = event.balls;
+      next.strikes = event.strikes;
+      next.outs = event.outs;
+      next.bases = clone(event.bases);
+      next.inning = event.inning;
+      next.half = event.half;
+      next.teams.forEach((team, index) => {
+        team.innings = clone(event.teams[index].innings);
+        team.hits = event.teams[index].hits;
+        team.errors = event.teams[index].errors;
+      });
+      next.gameOver = false;
+      next.walkOff = false;
+      const battingTeam = activeTeamIndex(next);
+      next.orderIndexes[battingTeam] = event.batterIndex;
+      next.batterNumber = event.batterIndex + 1;
+      next.batter = next.teams[battingTeam].lineup[event.batterIndex].name;
+      if (previous.batterOverride || battingTeam !== activeTeamIndex(previous)
+        || event.batterIndex !== previous.orderIndexes[battingTeam]) next.batterPitchCount = 0;
+      next.batterOverride = false;
+      return next;
+    }
+    if (event.type === 'substitution') {
+      const next = clone(previous);
+      const team = next.teams[event.teamIndex];
+      if (!team) throw new Error('球員異動事件的球隊無效。');
+      if (event.code === 'swap-defense') {
+        const [firstIndex, secondIndex] = event.slots || [];
+        const first = team.lineup[firstIndex];
+        const second = team.lineup[secondIndex];
+        if (!first || !second) throw new Error('守備位置交換事件的棒次無效。');
+        const firstPosition = first.position === 'PH' ? first.previousPosition : first.position;
+        const secondPosition = second.position === 'PH' ? second.previousPosition : second.position;
+        first.position = secondPosition;
+        second.position = firstPosition;
+        delete first.previousPosition;
+        delete second.previousPosition;
+        return next;
+      }
+      const incoming = clone(event.player);
+      const outgoing = event.slot === 'pitcher' ? team.pitcher : team.lineup[event.slot];
+      if (!outgoing || !incoming) throw new Error('球員異動事件資料不完整。');
+      team.bench.push(outgoing);
+      if (event.slot === 'pitcher') team.pitcher = incoming;
+      else team.lineup[event.slot] = incoming;
+      if (event.base !== undefined) next.bases[event.base] = incoming.name;
+      if (event.code === 'batter' && next.batterOverride) next.batter = incoming.name;
+      return next;
+    }
+    throw new Error(`不支援的事件類型：${event.type}/${event.code}`);
   }
 
   function renderScoreboard() {
@@ -497,12 +545,54 @@
   }
   function currentHalfRecords() {
     const activeRecords = records.slice(0, cursor);
-    const innings = [...new Set([...activeRecords.map((record) => record.inning), state.inning])]
+    const stateAfter = statesAfterRecords(activeRecords, activeRecords.length);
+    const entries = activeRecords.map((record, index) => {
+      const stateBefore = index ? stateAfter[index - 1] : defaultState();
+      const eventState = record.event.type === 'setup' && record.event.code === 'set-game-state'
+        ? stateAfter[index] : stateBefore;
+      return { record, index, stateBefore, stateAfter: stateAfter[index], inning: eventState.inning, half: eventState.half };
+    });
+    const innings = [...new Set([...entries.map((entry) => entry.inning), state.inning])]
       .sort((first, second) => first - second);
-    return { activeRecords, innings };
+    return { entries, innings };
+  }
+  function describeEvent(event, before, after) {
+    if (event.type === 'play') {
+      const batterAdvanced = after.orderIndexes[activeTeamIndex(before)] !== before.orderIndexes[activeTeamIndex(before)];
+      if (event.code === 'ball' && batterAdvanced) return '壞球累計四球，打者保送';
+      const label = playLabels[event.code] || event.code;
+      return event.code === 'uncaught-third-strike' || event.code === 'swinging-strike'
+        || event.code === 'called-strike' || event.code === 'foul-tip'
+        ? (event.code === 'uncaught-third-strike' || after.orderIndexes[activeTeamIndex(before)] !== before.orderIndexes[activeTeamIndex(before)]
+          ? `K ${label}` : label)
+        : label;
+    }
+    if (event.type === 'runner' && event.code === 'steal') {
+      const runner = before.bases[event.from];
+      return `盜壘成功：${runner}${event.to > 2 ? '回本壘得分' : `進佔${bases[event.to]}`}`;
+    }
+    if (event.type === 'runner' && event.code === 'pickoff') return `牽制出局：${before.bases[event.base]} 出局`;
+    if (event.type === 'setup' && event.code === 'set-roster') return '更新比賽資訊與先發名單';
+    if (event.type === 'setup' && event.code === 'set-game-state') return '直接設定比賽狀態';
+    if (event.type === 'substitution' && event.code === 'swap-defense') {
+      return `交換守備位置：${after.teams[event.teamIndex].lineup[event.slots[0]].name}`
+        + ` (${after.teams[event.teamIndex].lineup[event.slots[0]].position}) ↔ `
+        + `${after.teams[event.teamIndex].lineup[event.slots[1]].name}`
+        + ` (${after.teams[event.teamIndex].lineup[event.slots[1]].position})`;
+    }
+    if (event.type === 'substitution') {
+      const teamBefore = before.teams[event.teamIndex];
+      const outgoing = event.slot === 'pitcher' ? teamBefore.pitcher : teamBefore.lineup[event.slot];
+      const position = event.player.position === 'PH' ? event.player.previousPosition || 'DH' : event.player.position;
+      const verb = event.code === 'defense' ? `更換守備 ${position}`
+        : event.code === 'runner' ? `更換代跑 ${bases[event.base]}`
+          : `更換代打 ${Number(event.slot) + 1} 棒`;
+      return `${verb}：${outgoing.name} → ${event.player.name}`;
+    }
+    return event.code;
   }
   function renderHistory() {
-    const { activeRecords, innings } = currentHalfRecords();
+    const { entries, innings } = currentHalfRecords();
     if (!innings.includes(selectedInning)) selectedInning = state.inning;
     if (!innings.includes(selectedInning)) selectedInning = innings[innings.length - 1];
     $('#record-total').textContent = records.length;
@@ -510,30 +600,39 @@
     $('#previous-inning').disabled = selectedInning <= innings[0];
     $('#next-inning').disabled = selectedInning >= innings[innings.length - 1];
     $('#half-tabs').innerHTML = ['top', 'bottom'].map((half) => {
-      const count = activeRecords.filter((record) => record.inning === selectedInning && record.half === half).length;
+      const count = entries.filter((entry) => entry.inning === selectedInning && entry.half === half).length;
       return `<button type="button" role="tab" aria-selected="${half === selectedHalf}" class="half-tab ${half === selectedHalf ? 'selected' : ''}" data-half="${half}">${half === 'top' ? '上半局' : '下半局'} <span>${count}</span></button>`;
     }).join('');
     document.querySelectorAll('[data-half]').forEach((button) => button.addEventListener('click', () => {
       selectedHalf = button.dataset.half;
       renderHistory();
     }));
-    const visibleRecords = activeRecords.map((record, index) => ({ record, index }))
-      .filter(({ record }) => record.inning === selectedInning && record.half === selectedHalf);
-    $('#record-list').innerHTML = visibleRecords.map(({ record, index }) => {
+    const visibleRecords = entries.filter((entry) => entry.inning === selectedInning && entry.half === selectedHalf);
+    $('#record-list').innerHTML = visibleRecords.map(({ record, index, stateBefore, stateAfter }) => {
       const position = index + 1;
-      const batter = record.batter
-        ? `打者 ${displayPlayerName(record.batter)} #${record.batter.number} ${record.batter.position}` : '';
-      const pitcherName = String(record.pitcher?.name || '').trim();
-      const pitcher = record.pitcher
-        ? `投手 ${pitcherName || '球員'} #${record.pitcher.number}${record.pitchNumber ? ` 第${record.pitchNumber}球` : ''}` : '';
-      const runnerStatus = (record.bases || record.state.bases || []).map((runner, baseIndex) =>
+      const lineupUpdate = record.event.code === 'set-roster';
+      const batter = activeBatter(stateBefore);
+      const pitcherBefore = currentPitcher(stateBefore);
+      const pitchNumber = pitcherBefore
+        && (stateAfter.pitcherCounts[pitcherBefore.id] || 0) > (stateBefore.pitcherCounts[pitcherBefore.id] || 0)
+        ? stateAfter.pitcherCounts[pitcherBefore.id] : null;
+      const pitcherName = String(pitcherBefore?.name || '').trim();
+      const pitcher = pitcherBefore
+        ? `投手 ${pitcherName || '球員'} #${pitcherBefore.number}${pitchNumber ? ` 第${pitchNumber}球` : ''}` : '';
+      const people = lineupUpdate ? '' : [batter, pitcher].filter(Boolean)
+        .map((person) => typeof person === 'string' ? person : `打者 ${displayPlayerName(person)} #${person.number} ${person.position}`)
+        .map((person) => `<span>${escapeHtml(person)}</span>`).join('') || '<span>比賽狀態設定</span>';
+      const halfEnded = Boolean(stateAfter._endingBases)
+        || stateBefore.inning !== stateAfter.inning || stateBefore.half !== stateAfter.half;
+      const recordBases = stateAfter._endingBases || stateAfter.bases;
+      const runnerStatus = recordBases.map((runner, baseIndex) =>
         runner ? `${bases[baseIndex]} ${runner}` : '').filter(Boolean);
-      const outs = record.outs ?? (record.state.outs === 0
-        && (record.state.inning !== record.inning || record.state.half !== record.half) ? 3 : record.state.outs);
+      const outs = halfEnded ? 3 : stateAfter.outs;
       const runnerSummary = outs >= 3
         ? (runnerStatus.length ? `殘壘：${runnerStatus.join('、')}` : '無殘壘')
         : (runnerStatus.length ? runnerStatus.join('、') : '壘上無人');
-      return `<li class="record-item"><div class="record-entry"><span class="record-number">${String(position).padStart(2, '0')}</span><div class="record-content"><span class="record-label">${escapeHtml(record.label)}</span><span class="record-people">${escapeHtml([batter, pitcher].filter(Boolean).join(' · ') || '比賽狀態設定')}</span><span class="record-runners">${escapeHtml(runnerSummary)}</span></div><span class="record-meta">${record.state.balls}-${record.state.strikes} · ${outs} 出局</span></div></li>`;
+      const runnerDetails = lineupUpdate ? '' : `<span class="record-runners">${escapeHtml(runnerSummary)}</span>`;
+      return `<li class="record-item"><div class="record-entry"><span class="record-number">${String(position).padStart(2, '0')}</span><div class="record-content"><span class="record-label">${escapeHtml(describeEvent(record.event, stateBefore, stateAfter))}</span>${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</div><span class="record-meta">${stateAfter.balls}-${stateAfter.strikes} · ${outs} 出局</span></div></li>`;
     }).join('');
     $('#history-help').textContent = `顯示 ${halfLabel(selectedInning, selectedHalf)}；紀錄可在此區域捲動閱讀。`;
   }
@@ -968,7 +1067,13 @@
     if (state.batterOverride || battingTeam !== activeTeamIndex(state)
       || next.orderIndexes[battingTeam] !== state.orderIndexes[battingTeam]) next.batterPitchCount = 0;
     next.batterOverride = false;
-    addRecord('直接設定比賽狀態', next, 'setup');
+    addRecord({
+      type: 'setup', code: 'set-game-state',
+      balls: next.balls, strikes: next.strikes, outs: next.outs, bases: next.bases,
+      inning: next.inning, half: next.half,
+      teams: next.teams.map((team) => ({ innings: team.innings, hits: team.hits, errors: team.errors })),
+      batterIndex: next.orderIndexes[activeTeamIndex(next)]
+    });
     setupDialog.close();
     showToast('已套用設定，記分板已更新。');
   });
@@ -1022,7 +1127,12 @@
     });
     if (!next.batterOverride) next.batter = batterName(next);
     next.gameInfo = String(data.get('gameInfo')).trim();
-    addRecord('更新比賽資訊與先發名單', next, 'setup');
+    addRecord({
+      type: 'setup', code: 'set-roster', gameInfo: next.gameInfo,
+      teams: next.teams.map((team) => ({
+        name: team.name, lineup: team.lineup, pitcher: team.pitcher
+      }))
+    });
     lineupDialog.close();
     showToast('已記錄比賽資訊與先發名單。');
   });
@@ -1102,17 +1212,16 @@
   $('#substitution-form').addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const next = clone(state);
-    const teamIndex = substitutionMode === 'defense' ? fieldingTeamIndex(next) : activeTeamIndex(next);
-    const team = next.teams[teamIndex];
+    const teamIndex = substitutionMode === 'defense' ? fieldingTeamIndex(state) : activeTeamIndex(state);
+    const team = state.teams[teamIndex];
     const selectedSlot = String(data.get('slot'));
     let runnerBaseIndex = -1;
     let slot = selectedSlot;
     if (substitutionMode === 'batter') {
-      slot = String(next.orderIndexes[teamIndex]);
+      slot = String(state.orderIndexes[teamIndex]);
     } else if (substitutionMode === 'runner') {
       runnerBaseIndex = Number(selectedSlot.replace('runner:', ''));
-      const runner = next.bases[runnerBaseIndex];
+      const runner = state.bases[runnerBaseIndex];
       const matchingSlots = team.lineup
         .map((player, index) => ({ player, index }))
         .filter(({ player }) => displayPlayerName(player).trim() === String(runner || '').trim());
@@ -1132,21 +1241,12 @@
         showToast('請選擇兩位不同的場上球員。');
         return;
       }
-      const firstPosition = team.lineup[index].position === 'PH'
-        ? team.lineup[index].previousPosition : team.lineup[index].position;
-      const secondPosition = team.lineup[otherIndex].position === 'PH'
-        ? team.lineup[otherIndex].previousPosition : team.lineup[otherIndex].position;
-      team.lineup[index].position = secondPosition;
-      team.lineup[otherIndex].position = firstPosition;
-      delete team.lineup[index].previousPosition;
-      delete team.lineup[otherIndex].previousPosition;
-      addRecord(`${team.name}交換守備位置：${team.lineup[index].name} (${secondPosition}) ↔ ${team.lineup[otherIndex].name} (${firstPosition})`, next, 'setup');
+      addRecord({ type: 'substitution', code: 'swap-defense', teamIndex, slots: [index, otherIndex] });
       substitutionDialog.close();
       showToast('守備位置交換已記入。');
       return;
     }
     const outgoing = isPitcher ? team.pitcher : team.lineup[index];
-    team.bench.push(outgoing);
     const position = isPitcher ? 'P'
       : outgoing.position === 'PH' ? outgoing.previousPosition || 'DH' : outgoing.position;
     const incoming = {
@@ -1156,18 +1256,11 @@
       position: substitutionMode === 'batter' ? 'PH' : position,
       ...(substitutionMode === 'batter' ? { previousPosition: position } : {})
     };
-    if (isPitcher) team.pitcher = incoming;
-    else team.lineup[index] = incoming;
-    if (runnerBaseIndex >= 0) next.bases[runnerBaseIndex] = incoming.name;
-    if (substitutionMode === 'batter' && next.batterOverride) {
-      next.batter = incoming.name;
-    }
-    const label = substitutionMode === 'defense'
-      ? `${team.name}更換守備 ${position}：${outgoing.name} → ${incoming.name}`
-      : substitutionMode === 'runner'
-        ? `${team.name}更換代跑 ${bases[runnerBaseIndex]}：${outgoing.name} → ${incoming.name}`
-        : `${team.name}更換代打 ${index + 1} 棒：${outgoing.name} → ${incoming.name}`;
-    addRecord(label, next, 'setup');
+    addRecord({
+      type: 'substitution', code: substitutionMode, teamIndex,
+      slot: isPitcher ? 'pitcher' : index, player: incoming,
+      ...(runnerBaseIndex >= 0 ? { base: runnerBaseIndex } : {})
+    });
     substitutionDialog.close();
     showToast('球員更換已記入。');
   });
@@ -1248,7 +1341,7 @@
       next.outs += 1;
       const result = next.outs >= 3;
       if (result) advanceHalfInning(next);
-      addRecord(`牽制出局：${runner} 出局`, next);
+      addRecord({ type: 'runner', code: 'pickoff', base: baseIndex });
     } else {
       const destination = baseIndex + 1;
       if (destination > 2) {
@@ -1263,7 +1356,7 @@
         next.bases[destination] = runner;
         next.bases[baseIndex] = null;
       }
-      addRecord(`盜壘成功：${runner}${destination > 2 ? '回本壘得分' : `進佔${bases[destination]}`}`, next);
+      addRecord({ type: 'runner', code: 'steal', from: baseIndex, to: destination });
     }
     stealDialog.close();
   });
@@ -1271,25 +1364,7 @@
 
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
   $('#export-button').addEventListener('click', () => {
-    const rosters = [];
-    const rosterIndexes = new Map();
-    const compactRecords = records.map((record) => {
-      const compactState = clone(record.state);
-      compactState.teams = compactState.teams.map((team) => {
-        const roster = { lineup: team.lineup, pitcher: team.pitcher, bench: team.bench };
-        const rosterKey = JSON.stringify(roster);
-        let rosterRef = rosterIndexes.get(rosterKey);
-        if (rosterRef === undefined) {
-          rosterRef = rosters.length;
-          rosterIndexes.set(rosterKey, rosterRef);
-          rosters.push(roster);
-        }
-        const { lineup, pitcher, bench, ...teamState } = team;
-        return { ...teamState, rosterRef };
-      });
-      return { ...record, state: compactState };
-    });
-    const payload = JSON.stringify({ format: 'ballpark-scoreboard-v2', rosters, records: compactRecords, cursor });
+    const payload = JSON.stringify({ format: 'ballpark-scoreboard-v4', records, cursor });
     const blob = new Blob([payload], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1309,33 +1384,9 @@
     try {
       if (file.size > 5 * 1024 * 1024) throw new Error('檔案超過 5 MB，無法匯入。');
       const data = JSON.parse(await file.text());
-      if (!Array.isArray(data.records) || !Number.isInteger(data.cursor)
+      if (data.format !== 'ballpark-scoreboard-v4' || !Array.isArray(data.records) || !Number.isInteger(data.cursor)
         || data.cursor < 0 || data.cursor > data.records.length) throw new Error('檔案不是有效的逐球紀錄。');
-      const imported = data.records.map((record) => {
-        if (!record || !record.state || typeof record.label !== 'string') throw new Error('逐球紀錄內容不完整。');
-        let stateToMigrate = record.state;
-        if (data.format === 'ballpark-scoreboard-v2') {
-          if (!Array.isArray(data.rosters) || !Array.isArray(record.state.teams)) {
-            throw new Error('逐球紀錄中的球員名單資料不完整。');
-          }
-          stateToMigrate = {
-            ...record.state,
-            teams: record.state.teams.map((team) => {
-              if (!team || !Number.isInteger(team.rosterRef)
-                || team.rosterRef < 0 || team.rosterRef >= data.rosters.length) {
-                throw new Error('逐球紀錄包含無效的球員名單參照。');
-              }
-              const roster = data.rosters[team.rosterRef];
-              if (!roster || !Array.isArray(roster.lineup) || !roster.pitcher || !Array.isArray(roster.bench)) {
-                throw new Error('逐球紀錄中的球員名單格式不正確。');
-              }
-              const { rosterRef, ...teamState } = team;
-              return { ...teamState, ...roster };
-            })
-          };
-        }
-        return { ...record, state: migrateState(stateToMigrate) };
-      });
+      const imported = normalizeRecords(data.records);
       replay(imported, imported.length);
       records = imported;
       cursor = data.cursor;

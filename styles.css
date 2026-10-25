@@ -309,8 +309,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .record-number { padding-top: 2px; }
 .record-content { display: grid; align-content: start; gap: 4px; min-width: 0; }
 .record-label { font-size: 13px; line-height: 1.35; }
-.record-people { color: #91a193; font-size: 10px; line-height: 1.4; }
-.record-runners { color: #c2d3b8; font-size: 12px; line-height: 1.4; }
+.record-people { color: #c2d3b8; font-size: 12px; line-height: 1.4; }
+.record-people > span { display: block; }
+.record-runners { color: #91a193; font-size: 10px; line-height: 1.4; }
 .record-meta { align-self: start; white-space: nowrap; }
 .lineup-scorebook { padding: 19px; }
 .scorebook-teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; margin-top: 14px; }
