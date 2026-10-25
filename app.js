@@ -83,6 +83,21 @@
     return source;
   }
 
+  async function loadVersion() {
+    const versionElement = $('#app-version');
+    try {
+      const response = await fetch('version.json', { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (typeof data.version !== 'string' || !data.version.trim()) {
+        throw new Error('version.json 缺少有效的 version 字串。');
+      }
+      versionElement.textContent = data.version.trim();
+    } catch {
+      versionElement.textContent = '';
+    }
+  }
+
   function replay(allRecords, through = allRecords.length) {
     let replayed = defaultState();
     for (const record of allRecords.slice(0, through)) {
@@ -94,7 +109,9 @@
   function statesAfterRecords(allRecords, through) {
     let current = defaultState();
     return allRecords.slice(0, through).map((record) => {
-      current = applyEvent(current, record.event);
+      const previous = { ...current };
+      delete previous._endingBases;
+      current = applyEvent(previous, record.event);
       return current;
     });
   }
@@ -1454,4 +1471,5 @@
 
   readSavedGame();
   render();
+  loadVersion();
 })();
