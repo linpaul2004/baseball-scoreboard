@@ -131,12 +131,22 @@
   }
 
   function addRecord(event) {
-    records = records.slice(0, cursor);
     const previous = state;
     const nextState = applyEvent(previous, event);
     if (nextState === previous) return;
-    records.push({ event: clone(event) });
-    cursor = records.length;
+    const updatedRecords = records.slice();
+    updatedRecords.splice(cursor, 0, { event: clone(event) });
+    try {
+      replay(updatedRecords);
+    } catch (error) {
+      console.error('無法套用新增紀錄後的後續事件。', error);
+      showToast(error instanceof Error
+        ? `無法新增紀錄，因為後續事件無法套用：${error.message}`
+        : '無法新增紀錄，因為後續事件無法套用。');
+      return;
+    }
+    records = updatedRecords;
+    cursor += 1;
     state = nextState;
     const location = event.type === 'setup' && event.code === 'set-game-state' ? nextState : previous;
     selectedInning = location.inning;
@@ -544,9 +554,8 @@
     return pinchHitterOption + lineupPositions.map(([code, name]) => `<option value="${code}" ${selected === code ? 'selected' : ''}>${code} ${name}</option>`).join('');
   }
   function currentHalfRecords() {
-    const activeRecords = records.slice(0, cursor);
-    const stateAfter = statesAfterRecords(activeRecords, activeRecords.length);
-    const entries = activeRecords.map((record, index) => {
+    const stateAfter = statesAfterRecords(records, records.length);
+    const entries = records.map((record, index) => {
       const stateBefore = index ? stateAfter[index - 1] : defaultState();
       const eventState = record.event.type === 'setup' && record.event.code === 'set-game-state'
         ? stateAfter[index] : stateBefore;
@@ -555,6 +564,18 @@
     const innings = [...new Set([...entries.map((entry) => entry.inning), state.inning])]
       .sort((first, second) => first - second);
     return { entries, innings };
+  }
+  function returnToLatestRecord() {
+    cursor = records.length;
+    state = cursor ? replay(records, cursor) : defaultState();
+    const latestEntry = currentHalfRecords().entries.at(-1);
+    selectedInning = latestEntry?.inning ?? state.inning;
+    selectedHalf = latestEntry?.half ?? state.half;
+    saveAndRender();
+    if (cursor) {
+      $('#record-list').querySelector(`[data-record-index="${cursor - 1}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+    }
   }
   function describeEvent(event, before, after) {
     if (event.type === 'play') {
@@ -608,9 +629,11 @@
       renderHistory();
     }));
     const visibleRecords = entries.filter((entry) => entry.inning === selectedInning && entry.half === selectedHalf);
-    $('#record-list').innerHTML = visibleRecords.map(({ record, index, stateBefore, stateAfter }) => {
+    $('#record-list').innerHTML = visibleRecords.map(({ record, index, stateBefore, stateAfter, inning, half }) => {
       const position = index + 1;
       const lineupUpdate = record.event.code === 'set-roster';
+      const label = describeEvent(record.event, stateBefore, stateAfter);
+      const isCurrent = cursor === index + 1;
       const batter = activeBatter(stateBefore);
       const pitcherBefore = currentPitcher(stateBefore);
       const pitchNumber = pitcherBefore
@@ -632,9 +655,12 @@
         ? (runnerStatus.length ? `殘壘：${runnerStatus.join('、')}` : '無殘壘')
         : (runnerStatus.length ? runnerStatus.join('、') : '壘上無人');
       const runnerDetails = lineupUpdate ? '' : `<span class="record-runners">${escapeHtml(runnerSummary)}</span>`;
-      return `<li class="record-item"><div class="record-entry"><span class="record-number">${String(position).padStart(2, '0')}</span><div class="record-content"><span class="record-label">${escapeHtml(describeEvent(record.event, stateBefore, stateAfter))}</span>${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</div><span class="record-meta">${stateAfter.balls}-${stateAfter.strikes} · ${outs} 出局</span></div></li>`;
+      return `<li class="record-item ${index >= cursor ? 'future' : ''}"><button class="record-entry ${isCurrent ? 'active' : ''}" type="button" data-record-index="${index}" data-record-inning="${inning}" data-record-half="${half}" aria-label="回到第 ${position} 筆紀錄：${escapeHtml(label)}"${isCurrent ? ' aria-current="step"' : ''}><span class="record-number">${String(position).padStart(2, '0')}</span><span class="record-content"><span class="record-label">${escapeHtml(label)}</span>${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</span><span class="record-meta">${stateAfter.balls}-${stateAfter.strikes} · ${outs} 出局</span></button></li>`;
     }).join('');
-    $('#history-help').textContent = `顯示 ${halfLabel(selectedInning, selectedHalf)}；紀錄可在此區域捲動閱讀。`;
+    const stateHelp = cursor < records.length
+      ? '目前為歷史狀態；新增紀錄會保留並接續後續紀錄。'
+      : '點選紀錄可回到當下狀態。';
+    $('#history-help').textContent = `顯示 ${halfLabel(selectedInning, selectedHalf)}；${stateHelp}`;
   }
 
   function render() {
@@ -711,7 +737,8 @@
         return `<li class="${currentBatter ? 'current-batter' : ''} ${nextBatter ? 'next-batter' : ''}"><span class="scorebook-order">${index + 1}</span><span class="scorebook-name">${escapeHtml(displayPlayerName(player))} <small>#${escapeHtml(player.number)}</small></span><span class="scorebook-position">${escapeHtml(player.position)}</span></li>`;
       }).join('')}</ol><div class="scorebook-pitcher ${onFieldPitcher ? 'fielding-pitcher' : ''}"><span>P</span>${pitcherName ? `${escapeHtml(pitcherName)} ` : ''}#${escapeHtml(pitcher?.number || '')}</div></section>`;
     }).join('');
-    $('#undo-button').disabled = cursor === 0;
+    $('#return-latest-button').disabled = cursor === records.length;
+    $('#delete-current-button').disabled = cursor === 0;
     renderHistory();
   }
 
@@ -883,6 +910,19 @@
   }
 
   document.querySelectorAll('[data-play]').forEach((button) => button.addEventListener('click', () => recordPlay(button.dataset.play)));
+  $('#record-list').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-record-index]');
+    if (!button) return;
+    const index = Number(button.dataset.recordIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= records.length) return;
+    cursor = index + 1;
+    state = replay(records, cursor);
+    selectedInning = Number(button.dataset.recordInning);
+    selectedHalf = button.dataset.recordHalf;
+    saveAndRender();
+    $('#record-list').querySelector(`[data-record-index="${index}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  });
   $('#previous-inning').addEventListener('click', () => {
     const { innings } = currentHalfRecords();
     const previous = innings.filter((inning) => inning < selectedInning).at(-1);
@@ -894,13 +934,22 @@
     selectedInning = innings.find((inning) => inning > selectedInning) || selectedInning;
     renderHistory();
   });
-  $('#undo-button').addEventListener('click', () => {
+  $('#return-latest-button').addEventListener('click', () => {
+    if (cursor === records.length) return;
+    returnToLatestRecord();
+    showToast('已回到最新紀錄。');
+  });
+  $('#delete-current-button').addEventListener('click', () => {
     if (!cursor) return;
-    records.splice(cursor - 1, 1);
-    cursor -= 1;
-    state = replay(records, cursor);
+    const deletedIndex = cursor - 1;
+    records.splice(deletedIndex, 1);
+    cursor = Math.min(deletedIndex + 1, records.length);
+    state = cursor ? replay(records, cursor) : defaultState();
+    const currentEntry = currentHalfRecords().entries[cursor - 1];
+    selectedInning = currentEntry?.inning ?? state.inning;
+    selectedHalf = currentEntry?.half ?? state.half;
     saveAndRender();
-    showToast('已復原並移除上一筆紀錄。');
+    showToast('已刪除目前紀錄。');
   });
   $('#new-game-button').addEventListener('click', () => {
     if (!window.confirm('確定重設比賽？目前的逐球紀錄也會一併清除。')) return;

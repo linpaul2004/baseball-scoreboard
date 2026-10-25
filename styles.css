@@ -109,12 +109,14 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .play-button-highlight > span { color: #b8e571; }
 .history-panel { padding: 19px 22px 13px; }
 .history-heading { align-items: center; }
+.history-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.history-heading-actions .button { padding: 8px 10px; white-space: nowrap; }
 .history-heading h2 span { display: inline-grid; min-width: 20px; height: 19px; place-items: center; margin-left: 5px; padding: 0 5px; border-radius: 5px; background: #2a3930; color: #afc0b1; font: 9px var(--mono); vertical-align: 2px; }
 .history-help { margin: 10px 0 8px; color: var(--muted); font-size: 10px; }
 .record-list { display: grid; gap: 5px; max-height: 270px; overflow: auto; margin: 0; padding: 0 4px 1px 0; list-style: none; }
-.record-item button { display: grid; width: 100%; grid-template-columns: 26px 1fr auto; align-items: center; gap: 9px; padding: 8px 9px; border: 1px solid transparent; border-radius: 7px; background: #1d2922; color: #d3dbd2; text-align: left; cursor: pointer; }
-.record-item button:hover { border-color: #445740; }
-.record-item button.active { border-color: #647d4e; background: #253328; }
+.record-item .record-entry { width: 100%; color: #d3dbd2; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.record-item .record-entry:hover { border-color: #445740; }
+.record-item .record-entry.active { border-color: #647d4e; background: #253328; }
 .record-number { color: #87978a; font: 9px var(--mono); }
 .record-label { font-size: 10px; }
 .record-meta { color: #839187; font: 9px var(--mono); }
@@ -249,7 +251,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .history-heading h2 span { font-size: 11px; }
 .history-help { min-height: 16px; margin: 9px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-list { flex: 1; min-height: 0; max-height: none; padding-right: 7px; }
-.record-item button { min-height: 37px; }
+.record-item .record-entry { min-height: 37px; }
 .record-label { font-size: 13px; }
 .record-meta, .record-number { font-size: 11px; }
 .field-position { z-index: 4; }

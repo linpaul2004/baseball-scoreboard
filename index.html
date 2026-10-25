@@ -128,7 +128,10 @@
           <section class="panel history-panel" aria-labelledby="history-heading">
             <div class="section-heading history-heading">
               <div><p class="eyebrow">GAME TIMELINE</p><h2 id="history-heading">逐球紀錄 <span id="record-total">0</span></h2></div>
-              <button class="button button-quiet" id="undo-button" type="button" disabled>↶ 復原上一筆</button>
+              <div class="history-heading-actions">
+                <button class="button button-quiet" id="return-latest-button" type="button" disabled>回到最新紀錄</button>
+                <button class="button button-quiet" id="delete-current-button" type="button" disabled>刪除目前紀錄</button>
+              </div>
             </div>
             <div class="history-tools">
               <div class="inning-pager">
@@ -181,7 +184,7 @@
 
         </aside>
       </section>
-      <footer class="footer-note"><span>v1.2.0</span> · 紀錄會自動儲存在這個瀏覽器</footer>
+      <footer class="footer-note"><span>v2.1.0</span> · 紀錄會自動儲存在這個瀏覽器</footer>
     </main>
 
     <dialog id="setup-dialog" class="setup-dialog">
