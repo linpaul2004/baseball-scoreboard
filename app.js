@@ -202,6 +202,7 @@
   }
   function advanceHalfInning(gameState) {
     if (gameState.gameOver) return;
+    const fieldingTeam = activeTeamIndex(gameState);
     gameState._endingBases = [...gameState.bases];
     gameState.batterPitchCount = 0;
     gameState.outs = 0;
@@ -219,9 +220,8 @@
     }
     if (gameState.half === 'top') gameState.half = 'bottom';
     else { gameState.half = 'top'; gameState.inning += 1; }
-    const battingTeam = gameState.teams[activeTeamIndex(gameState)];
-    battingTeam.lineup.forEach((player) => {
-      if (player.position === 'PH' && player.previousPosition) {
+    gameState.teams[fieldingTeam].lineup.forEach((player) => {
+      if ((player.position === 'PH' || player.position === 'PR') && player.previousPosition) {
         player.position = player.previousPosition;
         delete player.previousPosition;
       }
@@ -335,6 +335,7 @@
       clearCount(next);
       nextBatter(next);
     } else if (play === 'hbp' || play === 'intentional-walk') {
+      if (play === 'hbp') next.balls += 1;
       recordAppearance(next, activeBatter(next), play === 'hbp' ? '觸身球保送' : '故意四壞球保送');
       awardWalk(next, offense);
       clearCount(next);
@@ -566,9 +567,11 @@
         </div>`).join('');
     });
   }
+
   function positionOptions(selected = '') {
-    const pinchHitterOption = selected === 'PH' ? '<option value="PH" selected>PH 代打</option>' : '';
-    return pinchHitterOption + lineupPositions.map(([code, name]) => `<option value="${code}" ${selected === code ? 'selected' : ''}>${code} ${name}</option>`).join('');
+    const substitutionOptions = ['PH', 'PR'].includes(selected)
+      ? `<option value="${selected}" selected>${selected} ${selected === 'PH' ? '代打' : '代跑'}</option>` : '';
+    return substitutionOptions + lineupPositions.map(([code, name]) => `<option value="${code}" ${selected === code ? 'selected' : ''}>${code} ${name}</option>`).join('');
   }
   function currentHalfRecords() {
     const stateAfter = statesAfterRecords(records, records.length);
@@ -597,7 +600,7 @@
   function describeEvent(event, before, after) {
     if (event.type === 'play') {
       const batterAdvanced = after.orderIndexes[activeTeamIndex(before)] !== before.orderIndexes[activeTeamIndex(before)];
-      if (event.code === 'ball' && batterAdvanced) return '壞球累計四球，打者保送';
+      if (event.code === 'ball' && batterAdvanced) return '四壞保送';
       const label = playLabels[event.code] || event.code;
       return event.code === 'uncaught-third-strike' || event.code === 'swinging-strike'
         || event.code === 'called-strike' || event.code === 'foul-tip'
@@ -629,6 +632,23 @@
     }
     return event.code;
   }
+  function historyCount(event, before, after) {
+    const battingTeam = activeTeamIndex(before);
+    const plateAppearanceEnded = event.type === 'play' && (
+      before.orderIndexes[battingTeam] !== after.orderIndexes[battingTeam]
+      || before.inning !== after.inning
+      || before.half !== after.half
+    );
+    if (!plateAppearanceEnded) return `${after.balls}-${after.strikes}`;
+
+    let { balls, strikes } = before;
+    if (event.code === 'ball' || event.code === 'timeout-ball' || event.code === 'hbp') balls += 1;
+    else if (event.code === 'foul') strikes = Math.min(strikes + 1, 2);
+    else if (['swinging-strike', 'foul-tip', 'called-strike', 'timeout-strike', 'uncaught-third-strike'].includes(event.code)) {
+      strikes += 1;
+    }
+    return `${balls}-${strikes}`;
+  }
   function renderHistory() {
     const { entries, innings } = currentHalfRecords();
     if (!innings.includes(selectedInning)) selectedInning = state.inning;
@@ -651,16 +671,18 @@
       const lineupUpdate = record.event.code === 'set-roster';
       const label = describeEvent(record.event, stateBefore, stateAfter);
       const isCurrent = cursor === index + 1;
-      const batter = activeBatter(stateBefore);
-      const pitcherBefore = currentPitcher(stateBefore);
-      const pitchNumber = pitcherBefore
-        && (stateAfter.pitcherCounts[pitcherBefore.id] || 0) > (stateBefore.pitcherCounts[pitcherBefore.id] || 0)
-        ? stateAfter.pitcherCounts[pitcherBefore.id] : null;
-      const pitcherName = String(pitcherBefore?.name || '').trim();
-      const pitcher = pitcherBefore
-        ? `投手 ${pitcherName || '球員'} #${pitcherBefore.number}${pitchNumber ? ` 第${pitchNumber}球` : ''}` : '';
-      const people = lineupUpdate ? '' : [batter, pitcher].filter(Boolean)
-        .map((person) => typeof person === 'string' ? person : `打者 ${displayPlayerName(person)} #${person.number} ${person.position}`)
+      const peopleState = record.event.type === 'substitution' ? stateAfter : stateBefore;
+      const batter = activeBatter(peopleState);
+      const batterOrder = (peopleState.orderIndexes?.[activeTeamIndex(peopleState)] ?? 0) + 1;
+      const pitcherForDisplay = currentPitcher(peopleState);
+      const pitchNumber = pitcherForDisplay
+        && (stateAfter.pitcherCounts[pitcherForDisplay.id] || 0) > (stateBefore.pitcherCounts[pitcherForDisplay.id] || 0)
+        ? stateAfter.pitcherCounts[pitcherForDisplay.id] : null;
+      const pitcherName = String(pitcherForDisplay?.name || '').trim();
+      const pitcher = pitcherForDisplay
+        ? `投手 ${pitcherName || '球員'} #${pitcherForDisplay.number}${pitchNumber ? ` 第${pitchNumber}球` : ''}` : '';
+      const batterLabel = `${batterOrder}棒 ${displayPlayerName(batter)} #${batter.number} ${batter.position}`;
+      const people = lineupUpdate ? '' : [batterLabel, pitcher].filter(Boolean)
         .map((person) => `<span>${escapeHtml(person)}</span>`).join('') || '<span>比賽狀態設定</span>';
       const halfEnded = Boolean(stateAfter._endingBases)
         || stateBefore.inning !== stateAfter.inning || stateBefore.half !== stateAfter.half;
@@ -672,7 +694,8 @@
         ? (runnerStatus.length ? `殘壘：${runnerStatus.join('、')}` : '無殘壘')
         : (runnerStatus.length ? runnerStatus.join('、') : '壘上無人');
       const runnerDetails = lineupUpdate ? '' : `<span class="record-runners">${escapeHtml(runnerSummary)}</span>`;
-      return `<li class="record-item ${index >= cursor ? 'future' : ''}"><button class="record-entry ${isCurrent ? 'active' : ''}" type="button" data-record-index="${index}" data-record-inning="${inning}" data-record-half="${half}" aria-label="回到第 ${position} 筆紀錄：${escapeHtml(label)}"${isCurrent ? ' aria-current="step"' : ''}><span class="record-number">${String(position).padStart(2, '0')}</span><span class="record-content"><span class="record-label">${escapeHtml(label)}</span>${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</span><span class="record-meta">${stateAfter.balls}-${stateAfter.strikes} · ${outs} 出局</span></button></li>`;
+      const count = historyCount(record.event, stateBefore, stateAfter);
+      return `<li class="record-item ${index >= cursor ? 'future' : ''}"><button class="record-entry ${isCurrent ? 'active' : ''}" type="button" data-record-index="${index}" data-record-inning="${inning}" data-record-half="${half}" aria-label="回到第 ${position} 筆紀錄：${escapeHtml(label)}"${isCurrent ? ' aria-current="step"' : ''}><span class="record-number">${String(position).padStart(2, '0')}</span><span class="record-content"><span class="record-label">${escapeHtml(label)}</span>${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</span><span class="record-meta">${count} · ${outs} 出局</span></button></li>`;
     }).join('');
     const stateHelp = cursor < records.length
       ? '目前為歷史狀態；新增紀錄會保留並接續後續紀錄。'
@@ -721,7 +744,7 @@
     });
     const fielding = state.teams[fieldingTeamIndex()];
     const fieldPlayers = [
-    ...fielding.lineup.map((player) => player.position === 'PH' && player.previousPosition
+    ...fielding.lineup.map((player) => ['PH', 'PR'].includes(player.position) && player.previousPosition
       ? { ...player, position: player.previousPosition } : player)
       .filter((player) => player.position !== 'DH' && player.position !== 'P'),
     fielding.pitcher
@@ -1319,8 +1342,8 @@
       id: `SUB-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       name: String(data.get('name')).trim(),
       number: String(data.get('number')).trim(),
-      position: substitutionMode === 'batter' ? 'PH' : position,
-      ...(substitutionMode === 'batter' ? { previousPosition: position } : {})
+      position: substitutionMode === 'batter' ? 'PH' : substitutionMode === 'runner' ? 'PR' : position,
+      ...(substitutionMode !== 'defense' ? { previousPosition: position } : {})
     };
     addRecord({
       type: 'substitution', code: substitutionMode, teamIndex,
