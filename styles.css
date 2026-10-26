@@ -253,6 +253,15 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .record-list { flex: 1; min-height: 0; max-height: none; padding-right: 7px; }
 .record-item .record-entry { min-height: 37px; }
 .record-label { font-size: 13px; }
+@media (min-width: 901px) {
+  .game-layout.game-over { align-items: start; }
+  .game-layout.game-over .play-column {
+    height: var(--game-over-history-height, 430px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .game-layout.game-over .side-column { height: fit-content; }
+  .game-layout.game-over .history-panel { height: 100%; min-height: 0; }
+}
 .record-meta, .record-number { font-size: 11px; }
 .field-position { z-index: 4; }
 .pos-lf { left: 8%; }
@@ -333,6 +342,23 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .scorebook-pitcher { margin-top: 8px; border-top: 1px solid #35443a; padding: 8px 6px 0; color: #e7c59d; font-size: 14px; }
 .scorebook-pitcher span { margin-right: 7px; color: #f2c99a; font: inherit; }
 .scorebook-pitcher.fielding-pitcher { border: 1px solid #665241; border-radius: 6px; padding: 7px 6px; background: #302a22; color: #f2c99a; }
+.stats-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; padding: 12px; }
+.stats-action { min-height: 42px; color: #e0ebda; font-size: 14px; font-weight: 700; }
+.setup-dialog.stats-dialog { width: min(1120px, calc(100vw - 32px)); }
+.stats-team-switcher { display: flex; gap: 8px; margin: 17px 0 12px; }
+.stats-team-button { min-width: 92px; }
+.stats-team-button[aria-pressed="true"] { border-color: var(--accent); background: #34452e; color: #e5f8c6; }
+.stats-table-container { overflow: auto; max-height: min(62vh, 620px); border: 1px solid var(--line); border-radius: 8px; }
+.stats-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+.stats-table th, .stats-table td { border-bottom: 1px solid #304037; padding: 10px 11px; text-align: center; font-size: 14px; }
+.stats-table th { position: sticky; top: 0; z-index: 1; background: #202c25; color: #b6c3b7; font-size: 13px; }
+.stats-table td { color: #e2e9df; font-variant-numeric: tabular-nums; }
+.stats-table tbody tr:last-child td { border-bottom: 0; }
+.stats-table .stats-player { min-width: 150px; text-align: left; }
+.stats-table .stats-pitcher-name { text-align: center; }
+.stats-substitute-row .stats-player { padding-left: 27px; color: #becbbd; }
+.stats-order { color: var(--accent); font-family: var(--mono); }
+.stats-empty { padding: 24px; color: var(--muted); text-align: center; }
 
 body { min-width: 0; }
 .page-shell { width: min(1260px, calc(100% - 32px)); }

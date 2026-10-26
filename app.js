@@ -738,6 +738,16 @@
   function render() {
     renderScoreboard();
     renderLineup();
+    const gameLayout = $('.game-layout');
+    gameLayout.classList.remove('game-over');
+    if (state.gameOver && window.matchMedia('(min-width: 901px)').matches) {
+      gameLayout.style.setProperty('--game-over-history-height', `${$('.side-column').getBoundingClientRect().height}px`);
+    } else {
+      gameLayout.style.removeProperty('--game-over-history-height');
+    }
+    gameLayout.classList.toggle('game-over', state.gameOver);
+    $('.count-panel').hidden = state.gameOver;
+    $('.actions-panel').hidden = state.gameOver;
     $('#inning-number').textContent = state.inning;
     $('#inning-number').hidden = state.gameOver;
     $('#inning-half').textContent = state.gameOver ? '比賽結束' : state.half === 'top' ? '局上' : '局下';
@@ -812,6 +822,194 @@
     $('#return-latest-button').disabled = cursor === records.length;
     $('#delete-current-button').disabled = cursor === 0;
     renderHistory();
+  }
+
+  function calculateGameStats() {
+    const initial = defaultState();
+    const battingRows = initial.teams.map((team) => team.lineup.map((player, order) => ({
+      order,
+      players: [player],
+      stats: new Map()
+    })));
+    const battingPlayers = new Map();
+    const pitchingRows = initial.teams.map(() => []);
+    const pitchingPlayers = new Map();
+    const pitchingLine = () => ({ outs: 0, batters: 0, strikes: 0, pitches: 0, strikeouts: 0, hits: 0, walks: 0, hbp: 0, runs: 0 });
+    const playerKey = (teamIndex, player) => `${teamIndex}:${player.id}`;
+    const ensureBatter = (teamIndex, order, player) => {
+      const row = battingRows[teamIndex][order];
+      let participant = row.players.find((candidate) => candidate.id === player.id);
+      if (!participant) {
+        participant = player;
+        row.players.push(participant);
+      } else {
+        Object.assign(participant, player);
+      }
+      const key = playerKey(teamIndex, participant);
+      if (!battingPlayers.has(key)) battingPlayers.set(key, statLine());
+      row.stats.set(key, battingPlayers.get(key));
+      return battingPlayers.get(key);
+    };
+    const ensurePitcher = (teamIndex, player) => {
+      if (!player) return null;
+      const key = playerKey(teamIndex, player);
+      if (!pitchingPlayers.has(key)) {
+        const stat = pitchingLine();
+        pitchingPlayers.set(key, stat);
+        pitchingRows[teamIndex].push({ ...player, stat });
+      }
+      return pitchingPlayers.get(key);
+    };
+    initial.teams.forEach((team, teamIndex) => {
+      team.lineup.forEach((player, order) => ensureBatter(teamIndex, order, player));
+      ensurePitcher(teamIndex, team.pitcher);
+    });
+
+    const stateAfter = statesAfterRecords(records, cursor);
+    records.slice(0, cursor).forEach(({ event }, index) => {
+      const before = index ? stateAfter[index - 1] : initial;
+      const after = stateAfter[index];
+      if (event.type === 'setup' && event.code === 'set-roster') {
+        event.teams.forEach((team, teamIndex) => {
+          team.lineup.forEach((player, order) => {
+            const row = battingRows[teamIndex][order];
+            const existing = row.players.find((candidate) => candidate.id === player.id);
+            if (existing) Object.assign(existing, player);
+            else if (row.players.length === 1 && !battingPlayers.has(playerKey(teamIndex, row.players[0]))) {
+              row.players[0] = player;
+              ensureBatter(teamIndex, order, player);
+            }
+          });
+          const pitcher = team.pitcher;
+          const existingPitcher = pitchingRows[teamIndex].find((candidate) => candidate.id === pitcher.id);
+          if (existingPitcher) Object.assign(existingPitcher, pitcher);
+          else ensurePitcher(teamIndex, pitcher);
+        });
+      }
+
+      const battingTeam = activeTeamIndex(before);
+      const battingOrder = before.orderIndexes[battingTeam];
+      const substitutedOrder = Number(event.slot);
+      if (event.type === 'substitution' && event.code === 'batter'
+        && Number.isInteger(substitutedOrder) && substitutedOrder >= 0 && substitutedOrder < 9 && event.player) {
+        ensureBatter(event.teamIndex, substitutedOrder, event.player);
+      }
+      const plateAppearanceEnded = event.type === 'play' && (
+        before.orderIndexes[battingTeam] !== after.orderIndexes[battingTeam]
+        || before.inning !== after.inning || before.half !== after.half
+      );
+      if (plateAppearanceEnded) {
+        const batter = activeBatter(before);
+        const batterStats = ensureBatter(battingTeam, battingOrder, batter);
+        batterStats.appearances += 1;
+        if (['single', 'double', 'triple', 'home-run'].includes(event.code)) batterStats.hits += 1;
+        if (event.code === 'sacrifice') batterStats.sacrifices += 1;
+        if (['ball', 'timeout-ball'].includes(event.code) && before.balls === 3
+          || event.code === 'intentional-walk') batterStats.walks += 1;
+        if (event.code === 'hbp') batterStats.hbp += 1;
+        if (event.code === 'uncaught-third-strike'
+          || ['swinging-strike', 'called-strike', 'foul-tip', 'timeout-strike'].includes(event.code)) {
+          batterStats.strikeouts += 1;
+        }
+        const runsScored = Math.max(0, teamRuns(after.teams[battingTeam]) - teamRuns(before.teams[battingTeam]));
+        const isWalkOrHitByPitch = (['ball', 'timeout-ball'].includes(event.code) && before.balls === 3)
+          || event.code === 'intentional-walk' || event.code === 'hbp';
+        batterStats.rbi += runsBattedIn(event, before, after) + (isWalkOrHitByPitch ? runsScored : 0);
+      }
+
+      if (event.type === 'runner') {
+        const baseIndex = event.code === 'steal' ? event.from : event.base;
+        const runnerName = before.bases[baseIndex];
+        const runner = before.teams[battingTeam].lineup.find((player) => displayPlayerName(player) === runnerName);
+        if (runner) {
+          const runnerStats = ensureBatter(battingTeam,
+            before.teams[battingTeam].lineup.findIndex((player) => player.id === runner.id), runner);
+          if (event.code === 'steal') runnerStats.steals += 1;
+          if (event.code === 'pickoff') runnerStats.pickoffs += 1;
+        }
+      }
+
+      const pitcherTeam = fieldingTeamIndex(before);
+      const pitcher = currentPitcher(before);
+      const runsAllowed = ['play', 'runner'].includes(event.type)
+        ? Math.max(0, teamRuns(after.teams[battingTeam]) - teamRuns(before.teams[battingTeam])) : 0;
+      const strikePitches = [
+        'swinging-strike', 'called-strike', 'foul-tip', 'foul', 'uncaught-third-strike',
+        'out', 'force-out', 'fielder-choice', 'single', 'double', 'triple', 'home-run', 'error', 'sacrifice'
+      ];
+      const pitchingEvent = event.type === 'play'
+        && (actualPitch(event.code) || plateAppearanceEnded || runsAllowed > 0);
+      const pickoffEvent = event.type === 'runner' && event.code === 'pickoff';
+      if (pitchingEvent || pickoffEvent || runsAllowed > 0) {
+        const pitcherStats = ensurePitcher(pitcherTeam, pitcher);
+        if (pitcherStats) {
+          if (pitchingEvent && actualPitch(event.code)) {
+            pitcherStats.pitches += 1;
+            if (strikePitches.includes(event.code)) pitcherStats.strikes += 1;
+          }
+          if (plateAppearanceEnded) pitcherStats.batters += 1;
+          if (plateAppearanceEnded && (event.code === 'uncaught-third-strike'
+            || ['swinging-strike', 'called-strike', 'foul-tip', 'timeout-strike'].includes(event.code))) {
+            pitcherStats.strikeouts += 1;
+          }
+          if (plateAppearanceEnded && ['single', 'double', 'triple', 'home-run'].includes(event.code)) pitcherStats.hits += 1;
+          if (plateAppearanceEnded && (['ball', 'timeout-ball'].includes(event.code) && before.balls === 3
+            || event.code === 'intentional-walk')) pitcherStats.walks += 1;
+          if (plateAppearanceEnded && event.code === 'hbp') pitcherStats.hbp += 1;
+          pitcherStats.runs += runsAllowed;
+          const outsRecorded = after._endingBases
+            ? Math.max(0, 3 - before.outs)
+            : Math.max(0, after.outs - before.outs);
+          pitcherStats.outs += outsRecorded;
+        }
+      }
+
+      if (event.type === 'substitution' && event.slot === 'pitcher' && event.player) {
+        ensurePitcher(event.teamIndex, event.player);
+      }
+    });
+    return { battingRows, pitchingRows };
+  }
+
+  let statsDialogType = 'batting';
+  let statsTeamIndex = 0;
+  function renderStatsDialog() {
+    const playerKey = (teamIndex, player) => `${teamIndex}:${player.id}`;
+    const { battingRows, pitchingRows } = calculateGameStats();
+    const team = state.teams[statsTeamIndex];
+    const title = statsDialogType === 'batting' ? '打擊成績' : '投手成績';
+    $('#stats-dialog-title').textContent = `${title} · ${team.name}`;
+    $('#stats-team-switcher').innerHTML = state.teams.map((candidate, index) =>
+      `<button class="button button-quiet stats-team-button" type="button" data-stats-team="${index}" aria-pressed="${index === statsTeamIndex}">${escapeHtml(candidate.name)}</button>`
+    ).join('');
+
+    if (statsDialogType === 'batting') {
+      const headers = ['棒次', '姓名', '打席', '安打', '犧牲打', '打點', '四壞', '觸身', '被三振', '盜壘', '牽制出局'];
+      const rows = battingRows[statsTeamIndex].flatMap((row) => row.players.map((player, participantIndex) => {
+        const stats = row.stats.get(playerKey(statsTeamIndex, player)) || statLine();
+        const values = [stats.appearances, stats.hits, stats.sacrifices, stats.rbi, stats.walks, stats.hbp,
+          stats.strikeouts, stats.steals, stats.pickoffs];
+        return `<tr class="${participantIndex ? 'stats-substitute-row' : ''}"><td class="stats-order">${participantIndex ? '' : `${row.order + 1}棒`}</td><td class="stats-player">${escapeHtml(displayPlayerName(player))}${player.number ? ` <small>#${escapeHtml(player.number)}</small>` : ''}</td>${values.map((value) => `<td>${value}</td>`).join('')}</tr>`;
+      })).join('');
+      $('#stats-table-container').innerHTML = `<table class="stats-table" aria-label="${escapeHtml(team.name)}打擊成績"><thead><tr>${headers.map((header, index) => `<th${index === 1 ? ' class="stats-player"' : ''}>${header}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+      return;
+    }
+
+    const headers = ['投手', '局數', '打席', '好球／球數', '奪三振', '安打', '四壞', '觸身', '失分'];
+    const rows = pitchingRows[statsTeamIndex].map((pitcher) => {
+      const stats = pitcher.stat || pitchingPlayersStat(pitcher);
+      const innings = stats.outs % 3
+        ? `${Math.floor(stats.outs / 3)}.${stats.outs % 3}`
+        : String(Math.floor(stats.outs / 3));
+      return `<tr><td class="stats-player stats-pitcher-name">${escapeHtml(displayPlayerName(pitcher))}${pitcher.number ? ` <small>#${escapeHtml(pitcher.number)}</small>` : ''}</td><td>${innings}</td><td>${stats.batters}</td><td>${stats.strikes}／${stats.pitches}</td><td>${stats.strikeouts}</td><td>${stats.hits}</td><td>${stats.walks}</td><td>${stats.hbp}</td><td>${stats.runs}</td></tr>`;
+    }).join('');
+    $('#stats-table-container').innerHTML = `<table class="stats-table" aria-label="${escapeHtml(team.name)}投手成績"><thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td class="stats-empty" colspan="${headers.length}">尚無投手紀錄</td></tr>`}</tbody></table>`;
+  }
+  function statLine() {
+    return { appearances: 0, hits: 0, sacrifices: 0, rbi: 0, walks: 0, hbp: 0, strikeouts: 0, steals: 0, pickoffs: 0 };
+  }
+  function pitchingPlayersStat(pitcher) {
+    return pitcher.stat || { outs: 0, batters: 0, strikes: 0, pitches: 0, strikeouts: 0, hits: 0, walks: 0, hbp: 0, runs: 0 };
   }
 
   function showToast(message) {
@@ -1522,6 +1720,23 @@
     } finally {
       event.target.value = '';
     }
+  });
+
+  const statsDialog = $('#stats-dialog');
+  function openStats(type) {
+    statsDialogType = type;
+    statsTeamIndex = type === 'batting' ? activeTeamIndex() : fieldingTeamIndex();
+    renderStatsDialog();
+    statsDialog.showModal();
+  }
+  $('#batting-stats-button').addEventListener('click', () => openStats('batting'));
+  $('#pitching-stats-button').addEventListener('click', () => openStats('pitching'));
+  $('#close-stats').addEventListener('click', () => statsDialog.close());
+  $('#stats-team-switcher').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-stats-team]');
+    if (!button) return;
+    statsTeamIndex = Number(button.dataset.statsTeam);
+    renderStatsDialog();
   });
 
   readSavedGame();

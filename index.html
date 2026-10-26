@@ -181,7 +181,10 @@
             </div>
             <div id="scorebook-teams" class="scorebook-teams"></div>
           </section>
-
+          <section class="panel stats-actions" aria-label="球隊成績">
+            <button class="button button-quiet stats-action" id="batting-stats-button" type="button">打擊成績</button>
+            <button class="button button-quiet stats-action" id="pitching-stats-button" type="button">投手成績</button>
+          </section>
         </aside>
       </section>
       <footer class="footer-note"><span id="app-version"></span> · 紀錄會自動儲存在這個瀏覽器</footer>
@@ -284,6 +287,14 @@
         <p class="runner-error" id="steal-error" role="alert" aria-live="assertive" hidden></p>
         <div class="dialog-actions"><button class="button button-quiet" data-close="steal-dialog" type="button">取消</button><button class="button button-primary" id="runner-event-submit" type="submit">新增紀錄</button></div>
       </form>
+    </dialog>
+    <dialog id="stats-dialog" class="setup-dialog stats-dialog" aria-labelledby="stats-dialog-title">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">TEAM STATISTICS</p><h2 id="stats-dialog-title">打擊成績</h2></div>
+        <button class="dialog-close" id="close-stats" type="button" aria-label="關閉">×</button>
+      </div>
+      <div id="stats-team-switcher" class="stats-team-switcher" role="group" aria-label="切換球隊"></div>
+      <div id="stats-table-container" class="stats-table-container"></div>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   </body>
