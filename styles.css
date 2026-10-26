@@ -19,6 +19,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 360px; background: radial-gradient(ellipse at 15% 0%, #203128 0, transparent 35rem), var(--bg); }
+body.game-over { overflow: hidden; }
 button, input, select { font: inherit; }
 button { color: inherit; }
 .topbar { height: 70px; padding: 0 max(28px, calc((100vw - 1260px) / 2)); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #26322c; background: rgba(16, 24, 21, .84); }
@@ -123,6 +124,8 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .record-item.future { opacity: .48; }
 .record-list:empty { display: none; }
 .field-panel { padding: 19px 19px 15px; }
+.game-layout.game-over .field-panel,
+.game-layout.game-over .lineup-scorebook { display: none; }
 .field-team { color: #9dbf79; font-size: 9px; }
 .diamond-wrap { position: relative; width: 100%; height: 280px; margin-top: 11px; overflow: hidden; border: 1px solid #34453a; border-radius: 9px; background: radial-gradient(ellipse 75% 65% at 50% 100%, #253b2c 99%, #1b2a21 100%); }
 .basepath { position: absolute; top: 86px; left: 50%; width: 125px; height: 125px; border: 1px solid #778156; background: #63784a30; transform: translateX(-50%) rotate(45deg); }
@@ -250,18 +253,16 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .history-actions .button { padding: 8px 10px; white-space: nowrap; }
 .history-heading h2 span { font-size: 11px; }
 .history-help { min-height: 16px; margin: 9px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.record-list { flex: 1; min-height: 0; max-height: none; padding-right: 7px; }
+.record-list { flex: 1; min-height: 0; max-height: none; overflow: auto; padding-right: 7px; }
 .record-item .record-entry { min-height: 37px; }
 .record-label { font-size: 13px; }
-@media (min-width: 901px) {
-  .game-layout.game-over { align-items: start; }
-  .game-layout.game-over .play-column {
-    height: var(--game-over-history-height, 430px);
-    grid-template-rows: minmax(0, 1fr);
-  }
-  .game-layout.game-over .side-column { height: fit-content; }
-  .game-layout.game-over .history-panel { height: 100%; min-height: 0; }
+.game-layout.game-over { align-items: start; }
+.game-layout.game-over .play-column {
+  height: var(--game-over-history-height, 430px);
+  grid-template-rows: minmax(0, 1fr);
 }
+.game-layout.game-over .side-column { height: fit-content; }
+.game-layout.game-over .history-panel { height: 100%; min-height: 0; }
 .record-meta, .record-number { font-size: 11px; }
 .field-position { z-index: 4; }
 .pos-lf { left: 8%; }

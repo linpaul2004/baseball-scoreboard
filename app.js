@@ -739,15 +739,11 @@
     renderScoreboard();
     renderLineup();
     const gameLayout = $('.game-layout');
-    gameLayout.classList.remove('game-over');
-    if (state.gameOver && window.matchMedia('(min-width: 901px)').matches) {
-      gameLayout.style.setProperty('--game-over-history-height', `${$('.side-column').getBoundingClientRect().height}px`);
-    } else {
-      gameLayout.style.removeProperty('--game-over-history-height');
-    }
     gameLayout.classList.toggle('game-over', state.gameOver);
+    document.body.classList.toggle('game-over', state.gameOver);
     $('.count-panel').hidden = state.gameOver;
     $('.actions-panel').hidden = state.gameOver;
+    updateGameOverHistoryHeight();
     $('#inning-number').textContent = state.inning;
     $('#inning-number').hidden = state.gameOver;
     $('#inning-half').textContent = state.gameOver ? '比賽結束' : state.half === 'top' ? '局上' : '局下';
@@ -822,6 +818,18 @@
     $('#return-latest-button').disabled = cursor === records.length;
     $('#delete-current-button').disabled = cursor === 0;
     renderHistory();
+  }
+
+  function updateGameOverHistoryHeight() {
+    const gameLayout = $('.game-layout');
+    if (!state.gameOver) {
+      gameLayout.style.removeProperty('--game-over-history-height');
+      return;
+    }
+    const historyTop = $('.history-panel').getBoundingClientRect().top;
+    const bottomGap = 16;
+    const availableHeight = Math.max(0, window.innerHeight - historyTop - bottomGap);
+    gameLayout.style.setProperty('--game-over-history-height', `${availableHeight}px`);
   }
 
   function calculateGameStats() {
@@ -1739,7 +1747,7 @@
     statsTeamIndex = Number(button.dataset.statsTeam);
     renderStatsDialog();
   });
-
+  window.addEventListener('resize', updateGameOverHistoryHeight);
   readSavedGame();
   render();
   loadVersion();
