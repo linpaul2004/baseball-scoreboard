@@ -244,6 +244,23 @@
     gameState.plateAppearances[key] ||= [];
     gameState.plateAppearances[key].push({ result, inning: gameState.inning, half: gameState.half });
   }
+  function forceOutResult(gameState, destinations = {}) {
+    if (destinations.batter === 1) return null;
+    const forcedBases = [
+      Boolean(gameState.bases[0]),
+      Boolean(gameState.bases[0] && gameState.bases[1]),
+      Boolean(gameState.bases[0] && gameState.bases[1] && gameState.bases[2])
+    ];
+    const forcedRunnerOuts = forcedBases.filter((forced, base) =>
+      forced && destinations[base] === 0).length;
+    if (!forcedRunnerOuts) return null;
+    const runnerOuts = Object.entries(destinations)
+      .filter(([key, destination]) => key !== 'batter' && destination === 0).length;
+    const outsOnPlay = runnerOuts + 1;
+    if (outsOnPlay >= 3) return '三殺';
+    if (outsOnPlay >= 2) return '雙殺';
+    return null;
+  }
   function recordRunnerOuts(gameState, count, preserveCount = false) {
     if (gameState.gameOver) return;
     gameState.outs += count;
@@ -369,7 +386,8 @@
       const runnerOuts = moveRunners(next, runnerDestinations || {}, offense);
       const batterOut = runnerDestinations?.batter !== 1;
       if (!batterOut) next.bases[0] = batter;
-      recordAppearance(next, activeBatter(next), '封殺出局');
+      recordAppearance(next, activeBatter(next),
+        forceOutResult(gameState, runnerDestinations) || '封殺出局');
       recordCompletedOuts(next, runnerOuts + Number(batterOut));
     } else if (play === 'fielder-choice') {
       const runnerOuts = Object.values(runnerDestinations || {}).filter((destination) => destination === 0).length;
@@ -601,22 +619,9 @@
     if (event.type === 'play') {
       const batterAdvanced = after.orderIndexes[activeTeamIndex(before)] !== before.orderIndexes[activeTeamIndex(before)];
       if (event.code === 'ball' && batterAdvanced) return '四壞保送';
-      if (event.code === 'force-out' && event.runnerDestinations?.batter !== 1) {
-        const destinations = event.runnerDestinations || {};
-        const forcedBases = [
-          Boolean(before.bases[0]),
-          Boolean(before.bases[0] && before.bases[1]),
-          Boolean(before.bases[0] && before.bases[1] && before.bases[2])
-        ];
-        const forcedRunnerOuts = forcedBases.filter((forced, base) =>
-          forced && destinations[base] === 0).length;
-        if (forcedRunnerOuts) {
-          const runnerOutsOnPlay = Object.entries(destinations)
-            .filter(([key, destination]) => key !== 'batter' && destination === 0).length;
-          const outsOnPlay = runnerOutsOnPlay + 1;
-          if (outsOnPlay >= 3) return '三殺';
-          if (outsOnPlay >= 2) return '雙殺';
-        }
+      if (event.code === 'force-out') {
+        const forceResult = forceOutResult(before, event.runnerDestinations);
+        if (forceResult) return forceResult;
       }
       const label = playLabels[event.code] || event.code;
       return event.code === 'uncaught-third-strike' || event.code === 'swinging-strike'
