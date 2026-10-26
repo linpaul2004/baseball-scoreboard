@@ -601,6 +601,23 @@
     if (event.type === 'play') {
       const batterAdvanced = after.orderIndexes[activeTeamIndex(before)] !== before.orderIndexes[activeTeamIndex(before)];
       if (event.code === 'ball' && batterAdvanced) return '四壞保送';
+      if (event.code === 'force-out' && event.runnerDestinations?.batter !== 1) {
+        const destinations = event.runnerDestinations || {};
+        const forcedBases = [
+          Boolean(before.bases[0]),
+          Boolean(before.bases[0] && before.bases[1]),
+          Boolean(before.bases[0] && before.bases[1] && before.bases[2])
+        ];
+        const forcedRunnerOuts = forcedBases.filter((forced, base) =>
+          forced && destinations[base] === 0).length;
+        if (forcedRunnerOuts) {
+          const runnerOutsOnPlay = Object.entries(destinations)
+            .filter(([key, destination]) => key !== 'batter' && destination === 0).length;
+          const outsOnPlay = runnerOutsOnPlay + 1;
+          if (outsOnPlay >= 3) return '三殺';
+          if (outsOnPlay >= 2) return '雙殺';
+        }
+      }
       const label = playLabels[event.code] || event.code;
       return event.code === 'uncaught-third-strike' || event.code === 'swinging-strike'
         || event.code === 'called-strike' || event.code === 'foul-tip'
@@ -631,6 +648,14 @@
       return `${verb}：${outgoing.name} → ${event.player.name}`;
     }
     return event.code;
+  }
+  function runsBattedIn(event, before, after) {
+    if (event.type !== 'play'
+      || !['single', 'double', 'triple', 'home-run', 'out', 'sacrifice', 'fielder-choice'].includes(event.code)) {
+      return 0;
+    }
+    const offense = activeTeamIndex(before);
+    return Math.max(0, teamRuns(after.teams[offense]) - teamRuns(before.teams[offense]));
   }
   function historyCount(event, before, after) {
     const battingTeam = activeTeamIndex(before);
@@ -695,7 +720,9 @@
         : (runnerStatus.length ? runnerStatus.join('、') : '壘上無人');
       const runnerDetails = lineupUpdate ? '' : `<span class="record-runners">${escapeHtml(runnerSummary)}</span>`;
       const count = historyCount(record.event, stateBefore, stateAfter);
-      return `<li class="record-item ${index >= cursor ? 'future' : ''}"><button class="record-entry ${isCurrent ? 'active' : ''}" type="button" data-record-index="${index}" data-record-inning="${inning}" data-record-half="${half}" aria-label="回到第 ${position} 筆紀錄：${escapeHtml(label)}"${isCurrent ? ' aria-current="step"' : ''}><span class="record-number">${String(position).padStart(2, '0')}</span><span class="record-content"><span class="record-label">${escapeHtml(label)}</span>${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</span><span class="record-meta">${count} · ${outs} 出局</span></button></li>`;
+      const rbi = runsBattedIn(record.event, stateBefore, stateAfter);
+      const rbiDetails = rbi ? `<span class="record-rbi">${rbi} 分打點</span>` : '';
+      return `<li class="record-item ${index >= cursor ? 'future' : ''}"><button class="record-entry ${isCurrent ? 'active' : ''}" type="button" data-record-index="${index}" data-record-inning="${inning}" data-record-half="${half}" aria-label="回到第 ${position} 筆紀錄：${escapeHtml(label)}${rbi ? `，${rbi} 分打點` : ''}"${isCurrent ? ' aria-current="step"' : ''}><span class="record-number">${String(position).padStart(2, '0')}</span><span class="record-content"><span class="record-label">${escapeHtml(label)}</span>${rbiDetails}${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</span><span class="record-meta">${count} · ${outs} 出局</span></button></li>`;
     }).join('');
     const stateHelp = cursor < records.length
       ? '目前為歷史狀態；新增紀錄會保留並接續後續紀錄。'
