@@ -1,5 +1,5 @@
 (() => {
-  const STORAGE_KEY = 'ballpark-scoreboard-v4';
+  const STORAGE_KEY = 'ballpark-scoreboard-v5';
   const positions = [
     ['P', '投手'], ['C', '捕手'], ['1B', '一壘手'], ['2B', '二壘手'], ['3B', '三壘手'],
     ['SS', '游擊手'], ['LF', '左外野手'], ['CF', '中外野手'], ['RF', '右外野手'], ['DH', '指定打擊']
@@ -73,10 +73,9 @@
     return team.innings.reduce((sum, score) => sum + (score ?? 0), 0);
   }
 
-  function normalizeRecords(source) {
+  function validateRecords(source) {
     for (const record of source) {
-      if (!record || !record.event || typeof record.event.type !== 'string'
-        || typeof record.event.code !== 'string' || Object.keys(record).length !== 1) {
+      if (!record || typeof record.type !== 'string' || typeof record.code !== 'string') {
         throw new Error('逐球紀錄內容不完整。');
       }
     }
@@ -100,18 +99,18 @@
 
   function replay(allRecords, through = allRecords.length) {
     let replayed = defaultState();
-    for (const record of allRecords.slice(0, through)) {
-      if (!record || !record.event) throw new Error('逐球紀錄包含無效資料');
-      replayed = applyEvent(replayed, record.event);
+    for (const event of allRecords.slice(0, through)) {
+      if (!event) throw new Error('逐球紀錄包含無效資料');
+      replayed = applyEvent(replayed, event);
     }
     return replayed;
   }
   function statesAfterRecords(allRecords, through) {
     let current = defaultState();
-    return allRecords.slice(0, through).map((record) => {
+    return allRecords.slice(0, through).map((event) => {
       const previous = { ...current };
       delete previous._endingBases;
-      current = applyEvent(previous, record.event);
+      current = applyEvent(previous, event);
       return current;
     });
   }
@@ -121,10 +120,11 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (!saved) return;
       const data = JSON.parse(saved);
-      if (data.format !== 'ballpark-scoreboard-v4' || !Array.isArray(data.records) || !Number.isInteger(data.cursor)) {
+      if (data.format !== 'ballpark-scoreboard-v5'
+        || !Array.isArray(data.records) || !Number.isInteger(data.cursor)) {
         throw new Error('存檔資料格式不正確');
       }
-      records = normalizeRecords(data.records);
+      records = validateRecords(data.records);
       cursor = Math.max(0, Math.min(data.cursor, records.length));
       state = cursor ? replay(records, cursor) : defaultState();
     } catch (error) {
@@ -139,7 +139,7 @@
 
   function saveAndRender() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: 'ballpark-scoreboard-v4', records, cursor }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ format: 'ballpark-scoreboard-v5', records, cursor }));
     } catch (error) {
       console.error('無法儲存逐球紀錄。', error);
       showToast('儲存失敗，請檢查瀏覽器儲存空間。');
@@ -152,7 +152,7 @@
     const nextState = applyEvent(previous, event);
     if (nextState === previous) return;
     const updatedRecords = records.slice();
-    updatedRecords.splice(cursor, 0, { event: clone(event) });
+    updatedRecords.splice(cursor, 0, clone(event));
     try {
       replay(updatedRecords);
     } catch (error) {
@@ -595,7 +595,7 @@
     const stateAfter = statesAfterRecords(records, records.length);
     const entries = records.map((record, index) => {
       const stateBefore = index ? stateAfter[index - 1] : defaultState();
-      const eventState = record.event.type === 'setup' && record.event.code === 'set-game-state'
+      const eventState = record.type === 'setup' && record.code === 'set-game-state'
         ? stateAfter[index] : stateBefore;
       return { record, index, stateBefore, stateAfter: stateAfter[index], inning: eventState.inning, half: eventState.half };
     });
@@ -698,10 +698,10 @@
     const visibleRecords = entries.filter((entry) => entry.inning === selectedInning && entry.half === selectedHalf);
     $('#record-list').innerHTML = visibleRecords.map(({ record, index, stateBefore, stateAfter, inning, half }) => {
       const position = index + 1;
-      const lineupUpdate = record.event.code === 'set-roster';
-      const label = describeEvent(record.event, stateBefore, stateAfter);
+      const lineupUpdate = record.code === 'set-roster';
+      const label = describeEvent(record, stateBefore, stateAfter);
       const isCurrent = cursor === index + 1;
-      const peopleState = record.event.type === 'substitution' ? stateAfter : stateBefore;
+      const peopleState = record.type === 'substitution' ? stateAfter : stateBefore;
       const batter = activeBatter(peopleState);
       const batterOrder = (peopleState.orderIndexes?.[activeTeamIndex(peopleState)] ?? 0) + 1;
       const pitcherForDisplay = currentPitcher(peopleState);
@@ -724,8 +724,8 @@
         ? (runnerStatus.length ? `殘壘：${runnerStatus.join('、')}` : '無殘壘')
         : (runnerStatus.length ? runnerStatus.join('、') : '壘上無人');
       const runnerDetails = lineupUpdate ? '' : `<span class="record-runners">${escapeHtml(runnerSummary)}</span>`;
-      const count = historyCount(record.event, stateBefore, stateAfter);
-      const rbi = runsBattedIn(record.event, stateBefore, stateAfter);
+      const count = historyCount(record, stateBefore, stateAfter);
+      const rbi = runsBattedIn(record, stateBefore, stateAfter);
       const rbiDetails = rbi ? `<span class="record-rbi">${rbi} 分打點</span>` : '';
       return `<li class="record-item ${index >= cursor ? 'future' : ''}"><button class="record-entry ${isCurrent ? 'active' : ''}" type="button" data-record-index="${index}" data-record-inning="${inning}" data-record-half="${half}" aria-label="回到第 ${position} 筆紀錄：${escapeHtml(label)}${rbi ? `，${rbi} 分打點` : ''}"${isCurrent ? ' aria-current="step"' : ''}><span class="record-number">${String(position).padStart(2, '0')}</span><span class="record-content"><span class="record-label">${escapeHtml(label)}</span>${rbiDetails}${people ? `<span class="record-people">${people}</span>` : ''}${runnerDetails}</span><span class="record-meta">${count} · ${outs} 出局</span></button></li>`;
     }).join('');
@@ -866,7 +866,7 @@
     });
 
     const stateAfter = statesAfterRecords(records, cursor);
-    records.slice(0, cursor).forEach(({ event }, index) => {
+    records.slice(0, cursor).forEach((event, index) => {
       const before = index ? stateAfter[index - 1] : initial;
       const after = stateAfter[index];
       if (event.type === 'setup' && event.code === 'set-roster') {
@@ -1683,7 +1683,7 @@
 
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
   $('#export-button').addEventListener('click', () => {
-    const payload = JSON.stringify({ format: 'ballpark-scoreboard-v4', records, cursor });
+    const payload = JSON.stringify({ format: 'ballpark-scoreboard-v5', records, cursor });
     const blob = new Blob([payload], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1703,9 +1703,10 @@
     try {
       if (file.size > 5 * 1024 * 1024) throw new Error('檔案超過 5 MB，無法匯入。');
       const data = JSON.parse(await file.text());
-      if (data.format !== 'ballpark-scoreboard-v4' || !Array.isArray(data.records) || !Number.isInteger(data.cursor)
+      if (data.format !== 'ballpark-scoreboard-v5'
+        || !Array.isArray(data.records) || !Number.isInteger(data.cursor)
         || data.cursor < 0 || data.cursor > data.records.length) throw new Error('檔案不是有效的逐球紀錄。');
-      const imported = normalizeRecords(data.records);
+      const imported = validateRecords(data.records);
       replay(imported, imported.length);
       records = imported;
       cursor = data.cursor;
