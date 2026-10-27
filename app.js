@@ -347,13 +347,13 @@
       }
     } else if (play === 'uncaught-third-strike') {
       next.strikes += 1;
-      recordAppearance(next, activeBatter(next), '不死三振上壘');
+      recordAppearance(next, activeBatter(next), '不死三振');
       awardWalk(next, offense);
       clearCount(next);
       nextBatter(next);
     } else if (play === 'hbp' || play === 'intentional-walk') {
       if (play === 'hbp') next.balls += 1;
-      recordAppearance(next, activeBatter(next), play === 'hbp' ? '觸身球保送' : '故意四壞球保送');
+      recordAppearance(next, activeBatter(next), play === 'hbp' ? '觸身球保送' : '故意四壞');
       awardWalk(next, offense);
       clearCount(next);
       nextBatter(next);
@@ -760,16 +760,16 @@
     $('#ball-count').textContent = state.balls;
     $('#strike-count').textContent = state.strikes;
     $('#out-count').textContent = state.outs;
-    document.querySelectorAll('[data-play]').forEach((button) => { button.disabled = state.gameOver; });
-    document.querySelector('[data-play="sacrifice"]').disabled = state.gameOver || state.outs >= 2 || !state.bases.some(Boolean);
-    document.querySelector('[data-play="fielder-choice"]').disabled = state.gameOver || !state.bases.some(Boolean);
-    document.querySelector('[data-play="uncaught-third-strike"]').disabled = state.gameOver || state.outs < 2 && Boolean(state.bases[0]);
+    document.querySelectorAll('[data-play]').forEach((button) => { button.disabled = false; });
+    document.querySelector('[data-play="sacrifice"]').disabled = state.outs >= 2 || !state.bases.some(Boolean);
+    document.querySelector('[data-play="fielder-choice"]').disabled = !state.bases.some(Boolean);
+    document.querySelector('[data-play="uncaught-third-strike"]').disabled = state.strikes !== 2 || state.outs < 2 && Boolean(state.bases[0]);
     $('#ball-dots').innerHTML = Array.from({ length: 3 }, (_, i) => `<span class="count-dot ball ${i < state.balls ? 'active' : ''}"></span>`).join('');
     $('#strike-dots').innerHTML = Array.from({ length: 2 }, (_, i) => `<span class="count-dot strike ${i < state.strikes ? 'active' : ''}"></span>`).join('');
     $('#out-lights').innerHTML = Array.from({ length: 2 }, (_, i) => `<span class="out-light ${i < state.outs ? 'active' : ''}"></span>`).join('');
     const hasRunners = state.bases.some(Boolean);
-    document.querySelector('[data-play="steal"]').disabled = state.gameOver || !hasRunners;
-    document.querySelector('[data-play="pickoff"]').disabled = state.gameOver || !hasRunners;
+    document.querySelector('[data-play="steal"]').disabled = !hasRunners;
+    document.querySelector('[data-play="pickoff"]').disabled = !hasRunners;
     const pitcher = currentPitcher();
     $('#at-bat-pitch-count').textContent = state.batterPitchCount;
     $('#pitch-count').textContent = pitcher ? state.pitcherCounts[pitcher.id] || 0 : 0;
@@ -1611,7 +1611,7 @@
     const runnerOuts = Object.entries(destinations)
       .filter(([key, destination]) => (!fixedOut || key !== 'batter') && destination === 0).length;
     if (state.outs + fixedOut + runnerOuts > 3) {
-      showRunnerError('本次結果不能超過該局剩餘出局數。');
+      showRunnerError('出局數超過該局剩餘所需出局數。');
       return;
     }
     if (pendingHit === 'error' && destinations.batter === 0) {
@@ -1625,7 +1625,7 @@
     }
     if (['out', 'force-out'].includes(pendingHit)
       && destinations.batter !== 0) {
-      showRunnerError('接殺出局或封殺出局時，跑者只能留在原壘或出局。');
+      showRunnerError('接殺出局或封殺出局時，打者必須記為出局。');
       return;
     }
     clearRunnerError();
