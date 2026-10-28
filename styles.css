@@ -527,6 +527,7 @@ body { min-width: 0; }
 .runner-pool { margin: 16px 0 8px; color: #9eaf9f; font-size: 12px; }
 .runner-destinations { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .runner-destination { display: grid; min-height: 104px; align-content: start; gap: 10px; border: 1px dashed #4c5b4f; border-radius: 9px; padding: 10px; background: #1b2920; transition: .14s ease; }
+.runner-destination[hidden] { display: none; }
 .runner-destination > strong { color: #aebeac; font-size: 12px; }
 .runner-destination > span { display: flex; flex-wrap: wrap; gap: 5px; }
 .runner-destination.drop-target { border-color: var(--accent); background: #2c3b29; box-shadow: 0 0 0 2px #c8f36b24; }

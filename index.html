@@ -87,11 +87,11 @@
             </div>
             <div class="action-groups">
               <div class="action-group">
-              <h3><span class="group-icon icon-pitch">↗</span>未打擊出去</h3>
+              <h3><span class="group-icon icon-pitch">↗</span>沒打擊出去</h3>
                 <div class="action-buttons">
                   <button class="play-button" data-play="swinging-strike">揮棒落空<span>SWINGING STRIKE</span></button>
                   <button class="play-button" data-play="foul-tip">擦棒被捕<span>FOUL TIP</span></button>
-                  <button class="play-button" data-play="called-strike">好球未揮棒<span>CALLED STRIKE</span></button>
+                  <button class="play-button" data-play="called-strike">好球沒揮棒<span>CALLED STRIKE</span></button>
                   <button class="play-button" data-play="ball">壞球<span>BALL</span></button>
                   <button class="play-button" data-play="hbp">觸身球<span>HBP</span></button>
                   <button class="play-button" data-play="uncaught-third-strike">不死三振<span>UNCAUGHT THIRD STRIKE</span></button>
@@ -101,15 +101,15 @@
                 <h3><span class="group-icon icon-hit">↗</span>打擊出去</h3>
                 <div class="action-buttons">
                   <button class="play-button" data-play="foul">界外球<span>FOUL</span></button>
-                  <button class="play-button" data-play="out">接殺出局<span>OUT</span></button>
-                  <button class="play-button" data-play="force-out">封殺出局<span>FORCE OUT</span></button>
+                  <button class="play-button" data-play="fly-out">飛球接殺<span>FLY OUT</span></button>
+                  <button class="play-button" data-play="ground-out">滾地球出局<span>GROUND OUT</span></button>
                   <button class="play-button" data-play="fielder-choice">野手選擇<span>FC</span></button>
                   <button class="play-button" data-play="single">一壘安打<span>1B</span></button>
                   <button class="play-button" data-play="double">二壘安打<span>2B</span></button>
                   <button class="play-button" data-play="triple">三壘安打<span>3B</span></button>
                   <button class="play-button play-button-highlight" data-play="home-run">全壘打<span>HR</span></button>
                   <button class="play-button sacrifice-button" data-play="sacrifice">犧牲打<span>SAC</span></button>
-                  <button class="play-button" data-play="error">失誤上壘<span>E</span></button>
+                  <button class="play-button" data-play="error">守備失誤<span>E</span></button>
                 </div>
               </div>
               <div class="action-group">
@@ -118,8 +118,11 @@
                   <button class="play-button" data-play="intentional-walk">故意四壞<span>IBB</span></button>
                   <button class="play-button" data-play="steal">盜壘<span>SB</span></button>
                   <button class="play-button" data-play="pickoff">牽制出局<span>PO</span></button>
-                  <button class="play-button" data-play="timeout-ball">超時壞球<span>不計球數</span></button>
-                  <button class="play-button" data-play="timeout-strike">超時好球<span>不計球數</span></button>
+                  <button class="play-button" id="time-violation-button">超時違規<span>TIME VIOLATION</span></button>
+                  <button class="play-button" data-play="balk">投手犯規<span>BALK</span></button>
+                  <button class="play-button" data-play="catcher-interference">妨礙打擊<span>CATCHER INTERFERENCE</span></button>
+                  <button class="play-button" data-play="interference">妨礙守備<span>INTERFERENCE</span></button>
+                  <button class="play-button" data-play="obstruction">妨礙跑壘<span>OBSTRUCTION</span></button>
                 </div>
               </div>
             </div>
@@ -287,6 +290,20 @@
         <p class="runner-error" id="steal-error" role="alert" aria-live="assertive" hidden></p>
         <div class="dialog-actions"><button class="button button-quiet" data-close="steal-dialog" type="button">取消</button><button class="button button-primary" id="runner-event-submit" type="submit">新增紀錄</button></div>
       </form>
+    </dialog>
+    <dialog id="time-violation-dialog" class="setup-dialog">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">TIME VIOLATION</p><h2>選擇超時違規</h2></div>
+        <button class="dialog-close" data-close="time-violation-dialog" type="button" aria-label="關閉">×</button>
+      </div>
+      <p class="dialog-description">選擇違規方。</p>
+      <div class="action-buttons">
+        <button class="play-button" data-timeout-play="timeout-strike">投球超時<span>超時好球</span></button>
+        <button class="play-button" data-timeout-play="timeout-ball">打擊超時<span>超時壞球</span></button>
+      </div>
+      <div class="dialog-actions">
+        <button class="button button-quiet" data-close="time-violation-dialog" type="button">取消</button>
+      </div>
     </dialog>
     <dialog id="stats-dialog" class="setup-dialog stats-dialog" aria-labelledby="stats-dialog-title">
       <div class="dialog-heading">
