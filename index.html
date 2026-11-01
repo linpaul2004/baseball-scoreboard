@@ -289,6 +289,7 @@
     <dialog id="steal-dialog" class="setup-dialog">
       <form id="steal-form">
         <div class="dialog-heading"><div><p class="eyebrow" id="steal-dialog-eyebrow">STOLEN BASE / WILD PITCH / PASSED BALL</p><h2>記錄盜壘</h2></div><button class="dialog-close" data-close="steal-dialog" type="button" aria-label="關閉">×</button></div>
+        <p class="dialog-description" id="steal-dialog-description">選擇事件類型，並選擇因這次事件推進的跑者。</p>
         <fieldset class="play-type-options" id="runner-event-types">
           <legend>事件類型（必選）</legend>
           <label><input type="radio" name="runnerEventType" value="steal" required><span>盜壘</span></label>
@@ -296,11 +297,15 @@
           <label><input type="radio" name="runnerEventType" value="passed-ball" required><span>捕逸</span></label>
         </fieldset>
         <fieldset class="runner-event-runners" id="steal-runner-options">
-          <legend>選擇跑者（可複選，至少一位）</legend>
+          <legend>跑者（可複選）</legend>
+          <div class="runner-event-choices" id="steal-runner-choices"></div>
         </fieldset>
-        <div class="form-grid" id="pickoff-runner-field" hidden>
-          <label>跑者<select name="runner"></select></label>
-        </div>
+        <fieldset class="runner-event-runners pickoff-runner-options" id="pickoff-runner-field" hidden>
+          <legend>跑者</legend>
+          <div class="form-grid">
+            <label><select name="runner" aria-label="跑者"></select></label>
+          </div>
+        </fieldset>
         <p class="runner-error" id="steal-error" role="alert" aria-live="assertive" hidden></p>
         <div class="dialog-actions"><button class="button button-quiet" data-close="steal-dialog" type="button">取消</button><button class="button button-primary" id="runner-event-submit" type="submit">新增紀錄</button></div>
       </form>

@@ -1775,6 +1775,9 @@
     $('#steal-dialog-eyebrow').textContent = pickoff ? 'PICKOFF'
       : 'STOLEN BASE / WILD PITCH / PASSED BALL';
     $('#steal-dialog h2').textContent = pickoff ? '牽制出局' : '盜壘・暴投・捕逸';
+    $('#steal-dialog-description').textContent = pickoff
+      ? '選擇遭牽制出局的跑者。'
+      : '選擇事件類型，並選擇因這次事件推進的跑者。';
     $('#runner-event-submit').textContent = pickoff ? '記錄牽制出局' : '新增紀錄';
     $('#runner-event-types').hidden = pickoff;
     $('#runner-event-types').disabled = pickoff;
@@ -1783,7 +1786,7 @@
     runnerSelect.required = pickoff;
     runnerSelect.value = runnerSelect.options[0]?.value || '';
     form.querySelectorAll('input[name="runnerEventType"]').forEach((input) => { input.checked = false; });
-    $('#steal-runner-options').innerHTML = state.bases.map((runner, index) => runner
+    $('#steal-runner-choices').innerHTML = state.bases.map((runner, index) => runner
       ? `<label class="runner-event-choice"><input type="checkbox" name="runners" value="${index}"><span>${bases[index]} · ${escapeHtml(runner)}</span></label>` : '').join('');
     stealDialog.showModal();
   }

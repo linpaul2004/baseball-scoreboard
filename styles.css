@@ -305,6 +305,9 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .play-type-options, .runner-event-runners { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .play-type-options[hidden], .runner-event-runners[hidden] { display: none; }
 .play-type-options legend, .runner-event-runners legend { padding: 0 6px; color: #aebbad; font-size: 11px; }
+.runner-event-choices { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
+.pickoff-runner-options { display: block; }
+.pickoff-runner-options .form-grid { grid-template-columns: minmax(0, 1fr); }
 .play-type-options label, .runner-event-choice { display: flex; min-height: 38px; align-items: center; gap: 8px; border: 1px solid #506255; border-radius: 7px; padding: 7px 11px; background: #111a15; color: #e5ebe2; cursor: pointer; font-size: 12px; }
 .play-type-options label:has(input:checked), .runner-event-choice:has(input:checked) { border-color: var(--accent); background: #34452e; color: #e5f8c6; }
 .play-type-options input, .runner-event-choice input { accent-color: var(--accent); }
