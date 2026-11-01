@@ -374,7 +374,6 @@
       }
     } else if (play === 'balk') {
       if (!next.bases.some(Boolean)) throw new Error('投手犯規必須有跑者在壘。');
-      next.teams[defense].errors += 1;
       const destinations = Object.fromEntries(next.bases.map((runner, index) =>
         runner ? [index, index + 2] : null).filter(Boolean));
       moveRunners(next, destinations, offense);
@@ -702,7 +701,7 @@
     if (event.type === 'runner' && ['steal', 'wild-pitch', 'passed-ball'].includes(event.code)) {
       const selected = event.runners || [event.from];
       const labels = { steal: '盜壘', 'wild-pitch': '暴投', 'passed-ball': '捕逸' };
-      const advances = selected.map((base) => `${bases[base]}跑者${base === 2 ? '回本壘得分' : `進佔${bases[base + 1]}`}`);
+      const advances = selected.map((base) => `${bases[base]} ➜ ${base === 2 ? '本壘' : `${bases[base + 1]}`}`);
       return `${labels[event.code]}：${advances.join('；')}`;
     }
     if (event.type === 'runner' && event.code === 'pickoff') return `牽制出局：${before.bases[event.base]} 出局`;
@@ -710,7 +709,7 @@
     if (event.type === 'setup' && event.code === 'set-game-state') return '直接設定比賽狀態';
     if (event.type === 'substitution' && event.code === 'swap-defense') {
       return `交換守備位置：${after.teams[event.teamIndex].lineup[event.slots[0]].name}`
-        + ` (${after.teams[event.teamIndex].lineup[event.slots[0]].position}) ↔ `
+        + ` (${after.teams[event.teamIndex].lineup[event.slots[0]].position}) ⇔ `
         + `${after.teams[event.teamIndex].lineup[event.slots[1]].name}`
         + ` (${after.teams[event.teamIndex].lineup[event.slots[1]].position})`;
     }
@@ -721,7 +720,7 @@
       const verb = event.code === 'defense' ? `更換守備 ${position}`
         : event.code === 'runner' ? `更換代跑 ${bases[event.base]}`
           : `更換代打 ${Number(event.slot) + 1} 棒`;
-      return `${verb}：${outgoing.name} → ${event.player.name}`;
+      return `${verb}：${outgoing.name} ➜ ${event.player.name}`;
     }
     return event.code;
   }
