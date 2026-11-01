@@ -107,22 +107,22 @@
                   <button class="play-button" data-play="single">一壘安打<span>1B</span></button>
                   <button class="play-button" data-play="double">二壘安打<span>2B</span></button>
                   <button class="play-button" data-play="triple">三壘安打<span>3B</span></button>
-                  <button class="play-button play-button-highlight" data-play="home-run">全壘打<span>HR</span></button>
-                  <button class="play-button sacrifice-button" data-play="sacrifice">犧牲打<span>SAC</span></button>
-                  <button class="play-button" data-play="error">守備失誤<span>E</span></button>
+                  <button class="play-button play-button-highlight" data-play="home-run">全壘打<span>HOMERUN</span></button>
+                  <button class="play-button sacrifice-button" data-play="sacrifice">犧牲打<span>SACRIFICE</span></button>
+                  <button class="play-button" data-play="foul-bunt">觸擊界外<span>FOUL BUNT</span></button>
+                  <button class="play-button" data-play="error">守備失誤<span>ERROR</span></button>
+                  <button class="play-button" data-play="interference">妨礙守備<span>INTERFERENCE</span></button>
                 </div>
               </div>
               <div class="action-group">
                 <h3><span class="group-icon icon-other">＋</span>其他紀錄</h3>
                 <div class="action-buttons">
                   <button class="play-button" data-play="intentional-walk">故意四壞<span>IBB</span></button>
-                  <button class="play-button" data-play="steal">盜壘<span>SB</span></button>
-                  <button class="play-button" data-play="pickoff">牽制出局<span>PO</span></button>
+                  <button class="play-button" data-play="steal">盜壘・暴投・捕逸<span>SB / WP / PB</span></button>
+                  <button class="play-button" data-play="pickoff">牽制出局<span>PICKOFF</span></button>
                   <button class="play-button" id="time-violation-button">超時違規<span>TIME VIOLATION</span></button>
                   <button class="play-button" data-play="balk">投手犯規<span>BALK</span></button>
                   <button class="play-button" data-play="catcher-interference">妨礙打擊<span>CATCHER INTERFERENCE</span></button>
-                  <button class="play-button" data-play="interference">妨礙守備<span>INTERFERENCE</span></button>
-                  <button class="play-button" data-play="obstruction">妨礙跑壘<span>OBSTRUCTION</span></button>
                 </div>
               </div>
             </div>
@@ -158,7 +158,7 @@
           <section class="panel field-panel" aria-labelledby="field-heading">
             <div class="section-heading">
               <div><p class="eyebrow">FIELD & RUNNERS</p><h2 id="field-heading">守備位置</h2></div>
-              <span class="field-team" id="fielding-team">主隊守備</span>
+              <span class="field-team" id="fielding-team">主隊防守</span>
             </div>
             <div class="diamond-wrap">
               <div class="basepath"></div>
@@ -250,7 +250,7 @@
     </dialog>
     <dialog id="substitution-dialog" class="setup-dialog">
       <form id="substitution-form">
-        <div class="dialog-heading"><div><p class="eyebrow">LINEUP CHANGE</p><h2 id="substitution-title">更換守備</h2></div><button class="dialog-close" data-close="substitution-dialog" type="button" aria-label="關閉">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow" id="substitution-eyebrow">LINEUP CHANGE</p><h2 id="substitution-title">更換守備</h2></div><button class="dialog-close" data-close="substitution-dialog" type="button" aria-label="關閉">×</button></div>
         <p class="dialog-description" id="substitution-description">選擇守備位置及新球員，異動將記入逐球紀錄。</p>
         <div class="form-grid">
           <label id="defense-mode-field">守備異動<select name="defenseMode"><option value="replace">換下場</option><option value="swap">交換守備位置</option></select></label>
@@ -264,7 +264,7 @@
     </dialog>
     <dialog id="runner-dialog" class="setup-dialog runner-dialog">
       <form id="runner-form">
-        <div class="dialog-heading"><div><p class="eyebrow">RUNNER ADVANCEMENT</p><h2 id="runner-dialog-title">輸入跑壘結果</h2></div><button class="dialog-close" data-close="runner-dialog" type="button" aria-label="關閉">×</button></div>
+        <div class="dialog-heading"><div><p class="eyebrow" id="runner-dialog-eyebrow">RUNNER ADVANCEMENT</p><h2 id="runner-dialog-title">輸入跑壘結果</h2></div><button class="dialog-close" data-close="runner-dialog" type="button" aria-label="關閉">×</button></div>
         <p class="dialog-description" id="runner-dialog-description">拖曳跑者到目標壘包，也可用選單選擇壘包或出局。</p>
         <p class="runner-error" id="runner-error" role="alert" hidden></p>
         <div class="runner-drag-board" id="runner-board">
@@ -278,13 +278,27 @@
           </div>
         </div>
         <div id="runner-choices" class="runner-choices"></div>
+        <fieldset class="play-type-options" id="sacrifice-type-options" disabled hidden>
+          <legend>犧牲打類型（必選）</legend>
+          <label><input type="radio" name="sacrificeType" value="bunt" required><span>犧牲觸擊</span></label>
+          <label><input type="radio" name="sacrificeType" value="fly" required><span>犧牲高飛</span></label>
+        </fieldset>
         <div class="dialog-actions"><button class="button button-quiet" data-close="runner-dialog" type="button">取消</button><button class="button button-primary" id="runner-submit" type="submit">記錄跑壘</button></div>
       </form>
     </dialog>
     <dialog id="steal-dialog" class="setup-dialog">
       <form id="steal-form">
-        <div class="dialog-heading"><div><p class="eyebrow">STEAL ATTEMPT</p><h2>記錄盜壘</h2></div><button class="dialog-close" data-close="steal-dialog" type="button" aria-label="關閉">×</button></div>
-        <div class="form-grid">
+        <div class="dialog-heading"><div><p class="eyebrow" id="steal-dialog-eyebrow">STOLEN BASE / WILD PITCH / PASSED BALL</p><h2>記錄盜壘</h2></div><button class="dialog-close" data-close="steal-dialog" type="button" aria-label="關閉">×</button></div>
+        <fieldset class="play-type-options" id="runner-event-types">
+          <legend>事件類型（必選）</legend>
+          <label><input type="radio" name="runnerEventType" value="steal" required><span>盜壘</span></label>
+          <label><input type="radio" name="runnerEventType" value="wild-pitch" required><span>暴投</span></label>
+          <label><input type="radio" name="runnerEventType" value="passed-ball" required><span>捕逸</span></label>
+        </fieldset>
+        <fieldset class="runner-event-runners" id="steal-runner-options">
+          <legend>選擇跑者（可複選，至少一位）</legend>
+        </fieldset>
+        <div class="form-grid" id="pickoff-runner-field" hidden>
           <label>跑者<select name="runner"></select></label>
         </div>
         <p class="runner-error" id="steal-error" role="alert" aria-live="assertive" hidden></p>

@@ -173,6 +173,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .setup-scoreboard td:nth-last-child(-n+2) input { width: 48px; }
 .setup-score-total { color: var(--accent); font-weight: 700; }
 .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.form-grid[hidden] { display: none; }
 .form-grid label, .runner-fields label { display: grid; gap: 6px; color: #aebbad; font-size: 10px; }
 .form-grid input, .form-grid select, .runner-fields input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #35463b; border-radius: 7px; outline: 0; background: #111a15; color: #e5ebe2; font-size: 12px; }
 .substitution-target-value { display: flex; min-height: 38px; align-items: center; border: 1px solid #35463b; border-radius: 7px; padding: 0 10px; background: #111a15; color: #e5ebe2; font-size: 12px; font-weight: 500; }
@@ -301,6 +302,13 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .runner-error { margin: 10px 0 0; border: 1px solid #a85847; border-radius: 7px; padding: 9px 12px; background: #422923; color: #ffd4c8; font-size: 13px; font-weight: 600; }
 .runner-error[hidden] { display: none; }
 .runner-choice { display: grid; grid-template-columns: 100px minmax(100px, 1fr) 150px; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.play-type-options, .runner-event-runners { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.play-type-options[hidden], .runner-event-runners[hidden] { display: none; }
+.play-type-options legend, .runner-event-runners legend { padding: 0 6px; color: #aebbad; font-size: 11px; }
+.play-type-options label, .runner-event-choice { display: flex; min-height: 38px; align-items: center; gap: 8px; border: 1px solid #506255; border-radius: 7px; padding: 7px 11px; background: #111a15; color: #e5ebe2; cursor: pointer; font-size: 12px; }
+.play-type-options label:has(input:checked), .runner-event-choice:has(input:checked) { border-color: var(--accent); background: #34452e; color: #e5f8c6; }
+.play-type-options input, .runner-event-choice input { accent-color: var(--accent); }
+.runner-event-choice { flex: 1 1 140px; }
 .force-options { display: flex; gap: 7px; }
 .force-choice-button { min-height: 36px; flex: 1; border: 1px solid #506255; border-radius: 7px; padding: 0 10px; background: #111a15; color: #e5ebe2; cursor: pointer; }
 .force-choice-button[aria-pressed="true"] { border-color: var(--accent); background: #34452e; color: #e5f8c6; }
