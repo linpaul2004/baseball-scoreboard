@@ -1142,7 +1142,7 @@
     $('#runner-dialog-eyebrow').textContent = play === 'interference' ? 'INTERFERENCE' : 'RUNNER ADVANCEMENT';
     $('#runner-dialog-title').textContent = labels[play] || '輸入跑壘結果';
     $('#runner-dialog-description').textContent = play === 'fielder-choice'
-      ? `${labels[play]}：打者上壘；至少選擇一位跑者出局。`
+      ? `${labels[play]}：打者上壘；可調整跑者推進結果。`
       : play === 'interference'
         ? `${labels[play]}：打者出局；調整跑者推進結果，跑者也可以留在原壘。`
         : play === 'sacrifice'
@@ -1722,11 +1722,6 @@
     if (pendingHit === 'fielder-choice'
       && (destinations.batter < 1 || destinations.batter > 3)) {
       showRunnerError('野手選擇時，打者不能出局或得分。');
-      return;
-    }
-    if (pendingHit === 'fielder-choice'
-      && !Object.entries(destinations).some(([key, destination]) => key !== 'batter' && destination === 0)) {
-      showRunnerError('野手選擇至少要有一位跑者出局。');
       return;
     }
     const sacrificeType = data.get('sacrificeType');
