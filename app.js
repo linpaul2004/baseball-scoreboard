@@ -1009,7 +1009,7 @@
         ? Math.max(0, teamRuns(after.teams[battingTeam]) - teamRuns(before.teams[battingTeam])) : 0;
       const strikePitches = [
         'swinging-strike', 'called-strike', 'foul-tip', 'foul-bunt', 'foul', 'uncaught-third-strike',
-        'fly-out', 'ground-out', 'fielder-choice',
+        'fly-out', 'ground-out', 'fielder-choice', 'interference',
         'single', 'double', 'triple', 'home-run', 'error', 'sacrifice'
       ];
       const pitchingEvent = event.type === 'play'
