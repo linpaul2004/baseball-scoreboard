@@ -1343,7 +1343,18 @@
   $('#delete-current-button').addEventListener('click', () => {
     if (!cursor) return;
     const deletedIndex = cursor - 1;
-    records.splice(deletedIndex, 1);
+    const updatedRecords = records.slice();
+    updatedRecords.splice(deletedIndex, 1);
+    try {
+      replay(updatedRecords);
+    } catch (error) {
+      console.error('無法套用刪除紀錄後的後續事件。', error);
+      showToast(error instanceof Error
+        ? `無法刪除紀錄，因為後續紀錄無法套用：${error.message}`
+        : '無法刪除紀錄，因為後續紀錄無法套用。');
+      return;
+    }
+    records = updatedRecords;
     cursor = Math.min(deletedIndex + 1, records.length);
     state = cursor ? replay(records, cursor) : defaultState();
     const currentEntry = currentHalfRecords().entries[cursor - 1];
