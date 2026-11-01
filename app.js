@@ -300,7 +300,7 @@
       openRunnerDialog(play);
       return;
     }
-    if (play === 'triple' || ['single', 'double'].includes(play) && state.bases.some(Boolean)) {
+    if (['single', 'double', 'triple'].includes(play)) {
       openRunnerDialog(play);
       return;
     }
@@ -826,10 +826,11 @@
     document.querySelector('[data-play="fielder-choice"]').disabled = !state.bases.some(Boolean);
     document.querySelector('[data-play="balk"]').disabled = !state.bases.some(Boolean);
     document.querySelector('[data-play="uncaught-third-strike"]').disabled = state.strikes !== 2 || state.outs < 2 && Boolean(state.bases[0]);
+    const hasRunners = state.bases.some(Boolean);
+    $('#pinch-run-button').disabled = !hasRunners;
     $('#ball-dots').innerHTML = Array.from({ length: 3 }, (_, i) => `<span class="count-dot ball ${i < state.balls ? 'active' : ''}"></span>`).join('');
     $('#strike-dots').innerHTML = Array.from({ length: 2 }, (_, i) => `<span class="count-dot strike ${i < state.strikes ? 'active' : ''}"></span>`).join('');
     $('#out-lights').innerHTML = Array.from({ length: 2 }, (_, i) => `<span class="out-light ${i < state.outs ? 'active' : ''}"></span>`).join('');
-    const hasRunners = state.bases.some(Boolean);
     document.querySelector('[data-play="steal"]').disabled = !hasRunners;
     document.querySelector('[data-play="pickoff"]').disabled = !hasRunners;
     const pitcher = currentPitcher();
@@ -1568,10 +1569,6 @@
 
   const substitutionDialog = $('#substitution-dialog');
   function openSubstitution(mode) {
-    if (mode === 'runner' && !state.bases.some(Boolean)) {
-      showToast('目前壘上沒有跑者。');
-      return;
-    }
     substitutionMode = mode;
     const form = $('#substitution-form');
     $('#substitution-eyebrow').textContent = mode === 'batter' ? 'PINCH HITTER'
@@ -1763,6 +1760,13 @@
     error.textContent = '';
     error.hidden = true;
   }
+  function updateRunnerEventSubmitLabel() {
+    const eventType = $('#steal-form').elements.runnerEventType.value;
+    const labels = { steal: '盜壘', 'wild-pitch': '暴投', 'passed-ball': '捕逸' };
+    $('#runner-event-submit').textContent = runnerEvent === 'pickoff'
+      ? '記錄牽制出局'
+      : eventType ? `記錄${labels[eventType]}` : '記錄';
+  }
   function openRunnerEventDialog(eventType) {
     runnerEvent = eventType;
     const form = $('#steal-form');
@@ -1778,7 +1782,6 @@
     $('#steal-dialog-description').textContent = pickoff
       ? '選擇遭牽制出局的跑者。'
       : '選擇事件類型，並選擇因這次事件推進的跑者。';
-    $('#runner-event-submit').textContent = pickoff ? '記錄牽制出局' : '新增紀錄';
     $('#runner-event-types').hidden = pickoff;
     $('#runner-event-types').disabled = pickoff;
     $('#steal-runner-options').hidden = pickoff;
@@ -1786,6 +1789,7 @@
     runnerSelect.required = pickoff;
     runnerSelect.value = runnerSelect.options[0]?.value || '';
     form.querySelectorAll('input[name="runnerEventType"]').forEach((input) => { input.checked = false; });
+    updateRunnerEventSubmitLabel();
     $('#steal-runner-choices').innerHTML = state.bases.map((runner, index) => runner
       ? `<label class="runner-event-choice"><input type="checkbox" name="runners" value="${index}"><span>${bases[index]} · ${escapeHtml(runner)}</span></label>` : '').join('');
     stealDialog.showModal();
@@ -1839,6 +1843,8 @@
   }
   $('#steal-form').elements.runner.addEventListener('change', clearStealError);
   $('#steal-form').addEventListener('change', clearStealError);
+  $('#steal-form').querySelectorAll('input[name="runnerEventType"]')
+    .forEach((input) => input.addEventListener('change', updateRunnerEventSubmitLabel));
 
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
   $('#export-button').addEventListener('click', () => {
