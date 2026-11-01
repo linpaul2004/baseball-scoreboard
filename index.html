@@ -110,7 +110,6 @@
                   <button class="play-button play-button-highlight" data-play="home-run">全壘打<span>HOMERUN</span></button>
                   <button class="play-button sacrifice-button" data-play="sacrifice">犧牲打<span>SACRIFICE</span></button>
                   <button class="play-button" data-play="foul-bunt">觸擊界外<span>FOUL BUNT</span></button>
-                  <button class="play-button" data-play="error">守備失誤<span>ERROR</span></button>
                   <button class="play-button" data-play="interference">妨礙守備<span>INTERFERENCE</span></button>
                 </div>
               </div>
@@ -268,7 +267,12 @@
         <p class="dialog-description" id="runner-dialog-description">拖曳跑者到目標壘包，也可用選單選擇壘包或出局。</p>
         <p class="runner-error" id="runner-error" role="alert" hidden></p>
         <div class="runner-drag-board" id="runner-board">
-          <div class="runner-pool" id="runner-pool"></div>
+          <div class="runner-board-toolbar">
+            <div class="runner-pool" id="runner-pool"></div>
+            <fieldset class="play-type-options" id="fielding-error-options" disabled hidden>
+              <label><input type="checkbox" name="fieldingError"><span>守備失誤</span></label>
+            </fieldset>
+          </div>
           <div class="runner-destinations">
             <div class="runner-destination" data-destination="1"><strong>一壘</strong><span></span></div>
             <div class="runner-destination" data-destination="2"><strong>二壘</strong><span></span></div>

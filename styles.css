@@ -535,7 +535,9 @@ body { min-width: 0; }
     .field-panel .field-team { font-size: 14px; }
   }
 .runner-dialog { width: min(720px, calc(100% - 30px)); }
-.runner-pool { margin: 16px 0 8px; color: #9eaf9f; font-size: 12px; }
+.runner-board-toolbar { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 8px; }
+.runner-pool { margin: 0; color: #9eaf9f; font-size: 12px; }
+.runner-board-toolbar .play-type-options { flex: 0 0 auto; justify-content: flex-end; margin: 0; border: 0; padding: 0; }
 .runner-destinations { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .runner-destination { display: grid; min-height: 104px; align-content: start; gap: 10px; border: 1px dashed #4c5b4f; border-radius: 9px; padding: 10px; background: #1b2920; transition: .14s ease; }
 .runner-destination[hidden] { display: none; }
@@ -575,7 +577,8 @@ body { min-width: 0; }
   .pitcher-count { min-width: auto; }
   .runner-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runner-destination { min-height: 80px; }
-  .runner-out { grid-column: span 2; }
+  .runner-board-toolbar { align-items: flex-start; }
+  .runner-pool { max-width: 60%; }
   .record-entry { grid-template-columns: 24px minmax(0, 1fr); }
   .record-meta { grid-column: 2; }
   .batter-history { grid-template-columns: 1fr; gap: 6px; }

@@ -12,7 +12,7 @@
     hbp: '觸身球', foul: '界外球',
     'fly-out': '飛球接殺',
     single: '一壘安打', double: '二壘安打', triple: '三壘安打',
-    'home-run': '全壘打', error: '守備失誤', 'fielder-choice': '野手選擇',
+    'home-run': '全壘打', 'fielder-choice': '野手選擇',
     'intentional-walk': '故意四壞', 'timeout-ball': '超時壞球', 'timeout-strike': '超時好球',
     sacrifice: '犧牲打', 'ground-out': '滾地球出局',
     pickoff: '牽制出局',
@@ -286,10 +286,6 @@
       openRunnerEventDialog(play);
       return;
     }
-    if (play === 'error') {
-      openRunnerDialog(play);
-      return;
-    }
     if (play === 'fielder-choice') {
       if (!state.bases.some(Boolean)) return;
       openRunnerDialog(play);
@@ -331,6 +327,22 @@
     const offense = activeTeamIndex(next);
     const defense = fieldingTeamIndex(next);
     const batter = batterName(next);
+    if (details.fieldingError !== undefined && typeof details.fieldingError !== 'boolean') {
+      throw new Error('守備失誤紀錄格式不正確。');
+    }
+    if (details.fieldingError === true) {
+      if (!['single', 'double', 'triple'].includes(play)) {
+        throw new Error('守備失誤只能搭配一壘安打、二壘安打或三壘安打。');
+      }
+      const hitBases = { single: 1, double: 2, triple: 3 }[play];
+      const batterDestination = runnerDestinations?.batter ?? hitBases;
+      if (!Number.isInteger(batterDestination) || batterDestination < 1 || batterDestination > 4
+        || (play !== 'single' && batterDestination <= hitBases)) {
+        throw new Error(play === 'single'
+          ? '記錄一壘安打的守備失誤時，打者不能出局。'
+          : `記錄${playLabels[play]}的守備失誤時，打者必須再推進一個壘包。`);
+      }
+    }
     if (actualPitch(play)) countPitch(next);
 
     if (play === 'swinging-strike' || play === 'foul-tip' || play === 'called-strike'
@@ -386,17 +398,6 @@
       } else {
         recordOut(next);
       }
-    } else if (play === 'error') {
-      next.teams[defense].errors += 1;
-      const errorDestinations = runnerDestinations || Object.fromEntries(next.bases.map((runner, index) =>
-        runner ? [index, Math.min(index + 2, 4)] : null).filter(Boolean));
-      if (errorDestinations.batter === undefined) errorDestinations.batter = 1;
-      const runnerOuts = Object.values(errorDestinations).filter((destination) => destination === 0).length;
-      advanceHitRunners(next, 1, batter, offense, errorDestinations);
-      recordAppearance(next, activeBatter(next), '守備失誤');
-      clearCount(next);
-      nextBatter(next);
-      if (runnerOuts) recordRunnerOuts(next, runnerOuts);
     } else if (play === 'steal') {
       return;
     } else if (play === 'sacrifice') {
@@ -435,8 +436,13 @@
     } else {
       const hitBases = { single: 1, double: 2, triple: 3, 'home-run': 4 }[play];
       if (!hitBases) return gameState;
-      next.teams[offense].hits += 1;
-      recordAppearance(next, activeBatter(next), playLabels[play]);
+      const batterDestination = runnerDestinations?.batter ?? (hitBases === 4 ? 4 : hitBases);
+      const errorOnlySingle = details.fieldingError === true && play === 'single' && batterDestination === 1;
+      if (details.fieldingError === true) next.teams[defense].errors += 1;
+      if (!errorOnlySingle) next.teams[offense].hits += 1;
+      const appearance = errorOnlySingle ? '守備失誤'
+        : playLabels[play];
+      recordAppearance(next, activeBatter(next), appearance);
       const runnerOuts = Object.values(runnerDestinations || {}).filter((destination) => destination === 0).length;
       advanceHitRunners(next, hitBases, batter, offense, runnerDestinations);
       clearCount(next);
@@ -671,10 +677,15 @@
   function describeEvent(event, before, after) {
     if (event.type === 'play') {
       const code = event.code;
+      const errorOnlySingle = isErrorOnlySingle(event);
       const batterAdvanced = after.orderIndexes[activeTeamIndex(before)] !== before.orderIndexes[activeTeamIndex(before)];
       if (['ball', 'timeout-ball'].includes(code) && batterAdvanced) {
         return code === 'timeout-ball' ? '四壞保送（超時）' : '四壞保送';
       }
+      if (event.fieldingError === true) {
+        return errorOnlySingle ? '守備失誤' : `${playLabels[code]}（守備失誤進壘）`;
+      }
+      if (isBatterAdvancingHit(event)) return `${playLabels[code]}（趁傳進壘）`;
       if (code === 'ground-out') {
         const forceResult = forceOutResult(before, event.runnerDestinations);
         if (forceResult) return forceResult;
@@ -717,11 +728,20 @@
   function runsBattedIn(event, before, after) {
     if (event.type !== 'play'
       || !['single', 'double', 'triple', 'home-run', 'fly-out', 'ground-out',
-        'sacrifice', 'fielder-choice'].includes(event.code)) {
+        'sacrifice', 'fielder-choice'].includes(event.code)
+      || isErrorOnlySingle(event)) {
       return 0;
     }
     const offense = activeTeamIndex(before);
     return Math.max(0, teamRuns(after.teams[offense]) - teamRuns(before.teams[offense]));
+  }
+  function isErrorOnlySingle(event) {
+    return event.code === 'single' && event.fieldingError === true
+      && event.runnerDestinations?.batter === 1;
+  }
+  function isBatterAdvancingHit(event) {
+    const hitBases = { single: 1, double: 2, triple: 3 }[event.code];
+    return hitBases !== undefined && event.runnerDestinations?.batter > hitBases;
   }
   function historyCount(event, before, after) {
     const battingTeam = activeTeamIndex(before);
@@ -974,7 +994,8 @@
         const batter = activeBatter(before);
         const batterStats = ensureBatter(battingTeam, battingOrder, batter);
         batterStats.appearances += 1;
-        if (['single', 'double', 'triple', 'home-run'].includes(playCode)) batterStats.hits += 1;
+        if (['single', 'double', 'triple', 'home-run'].includes(playCode)
+          && !isErrorOnlySingle(event)) batterStats.hits += 1;
         if (playCode === 'sacrifice') batterStats.sacrifices += 1;
         if ((['ball', 'timeout-ball'].includes(playCode) && before.balls === 3)
           || playCode === 'intentional-walk') batterStats.walks += 1;
@@ -990,20 +1011,6 @@
         batterStats.rbi += runsBattedIn(event, before, after) + (isWalkOrHitByPitch ? runsScored : 0);
       }
 
-      if (event.type === 'runner') {
-        const baseIndexes = event.code === 'pickoff' ? [event.base]
-          : Array.isArray(event.runners) ? event.runners
-            : event.code === 'steal' ? [event.from] : [];
-        baseIndexes.forEach((baseIndex) => {
-          const runnerName = before.bases[baseIndex];
-          const runner = before.teams[battingTeam].lineup.find((player) => displayPlayerName(player) === runnerName);
-          if (!runner) return;
-          const runnerStats = ensureBatter(battingTeam,
-            before.teams[battingTeam].lineup.findIndex((player) => player.id === runner.id), runner);
-          if (event.code === 'steal') runnerStats.steals += 1;
-        });
-      }
-
       const pitcherTeam = fieldingTeamIndex(before);
       const pitcher = currentPitcher(before);
       const runsAllowed = ['play', 'runner'].includes(event.type)
@@ -1011,7 +1018,7 @@
       const strikePitches = [
         'swinging-strike', 'called-strike', 'foul-tip', 'foul-bunt', 'foul', 'uncaught-third-strike',
         'fly-out', 'ground-out', 'fielder-choice', 'interference',
-        'single', 'double', 'triple', 'home-run', 'error', 'sacrifice'
+        'single', 'double', 'triple', 'home-run', 'sacrifice'
       ];
       const pitchingEvent = event.type === 'play'
         && (actualPitch(event.code) || plateAppearanceEnded || runsAllowed > 0);
@@ -1028,7 +1035,8 @@
             || ['swinging-strike', 'called-strike', 'foul-tip', 'foul-bunt', 'timeout-strike'].includes(playCode))) {
             pitcherStats.strikeouts += 1;
           }
-          if (plateAppearanceEnded && ['single', 'double', 'triple', 'home-run'].includes(playCode)) pitcherStats.hits += 1;
+          if (plateAppearanceEnded && ['single', 'double', 'triple', 'home-run'].includes(playCode)
+            && !isErrorOnlySingle(event)) pitcherStats.hits += 1;
           if (plateAppearanceEnded && ((['ball', 'timeout-ball'].includes(playCode) && before.balls === 3)
             || playCode === 'intentional-walk')) pitcherStats.walks += 1;
           if (plateAppearanceEnded && playCode === 'hbp') pitcherStats.hbp += 1;
@@ -1060,12 +1068,12 @@
     ).join('');
 
     if (statsDialogType === 'batting') {
-      const headers = ['棒次', '姓名', '打數／打席', '安打', '犧牲打', '打點', '四壞', '觸身', '被三振', '盜壘'];
+      const headers = ['棒次', '姓名', '打數／打席', '安打', '犧牲打', '打點', '四壞', '觸身', '被三振'];
       const rows = battingRows[statsTeamIndex].flatMap((row) => row.players.map((player, participantIndex) => {
         const stats = row.stats.get(playerKey(statsTeamIndex, player)) || statLine();
         const atBats = stats.appearances - stats.hbp - stats.sacrifices - stats.catcherInterferences;
         const values = [`${atBats}／${stats.appearances}`, stats.hits, stats.sacrifices, stats.rbi, stats.walks,
-          stats.hbp, stats.strikeouts, stats.steals];
+          stats.hbp, stats.strikeouts];
         return `<tr class="${participantIndex ? 'stats-substitute-row' : ''}"><td class="stats-order">${participantIndex ? '' : `${row.order + 1}棒`}</td><td class="stats-player">${escapeHtml(displayPlayerName(player))}${player.number ? ` <small>#${escapeHtml(player.number)}</small>` : ''}</td>${values.map((value) => `<td>${value}</td>`).join('')}</tr>`;
       })).join('');
       $('#stats-table-container').innerHTML = `<table class="stats-table" aria-label="${escapeHtml(team.name)}打擊成績"><thead><tr>${headers.map((header, index) => `<th${index === 1 ? ' class="stats-player"' : ''}>${header}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -1083,7 +1091,7 @@
     $('#stats-table-container').innerHTML = `<table class="stats-table" aria-label="${escapeHtml(team.name)}投手成績"><thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead><tbody>${rows || `<tr><td class="stats-empty" colspan="${headers.length}">尚無投手紀錄</td></tr>`}</tbody></table>`;
   }
   function statLine() {
-    return { appearances: 0, hits: 0, sacrifices: 0, rbi: 0, walks: 0, hbp: 0, catcherInterferences: 0, strikeouts: 0, steals: 0 };
+    return { appearances: 0, hits: 0, sacrifices: 0, rbi: 0, walks: 0, hbp: 0, catcherInterferences: 0, strikeouts: 0 };
   }
   function pitchingPlayersStat(pitcher) {
     return pitcher.stat || { outs: 0, batters: 0, strikes: 0, pitches: 0, strikeouts: 0, hits: 0, walks: 0, hbp: 0, runs: 0 };
@@ -1112,7 +1120,7 @@
   function openRunnerDialog(play) {
     pendingHit = play;
     const hitBases = {
-      single: 1, double: 2, triple: 3, 'home-run': 4, error: 1,
+      single: 1, double: 2, triple: 3, 'home-run': 4,
       'fielder-choice': 1
     }[play];
     const batter = batterName();
@@ -1134,7 +1142,7 @@
     const labels = {
       'fly-out': '飛球接殺', sacrifice: '犧牲打', 'ground-out': '滾地球出局',
       foul: '界外球', single: '一壘安打', double: '二壘安打',
-      triple: '三壘安打', 'home-run': '全壘打', error: '守備失誤',
+      triple: '三壘安打', 'home-run': '全壘打',
       'fielder-choice': '野手選擇', interference: '妨礙守備'
     };
     clearRunnerError();
@@ -1148,14 +1156,17 @@
         : play === 'sacrifice'
           ? '犧牲打：打者出局；調整跑者推進結果'
         : `${labels[play]}：拖曳跑者到目標位置，或使用選單；選擇出局可記錄跑者出局。`;
-    $('#runner-submit').textContent = `記錄${labels[play] || playLabels[play]}`;
     $('#runner-board').hidden = false;
     const sacrificeOptions = $('#sacrifice-type-options');
     sacrificeOptions.hidden = play !== 'sacrifice';
     sacrificeOptions.disabled = play !== 'sacrifice';
     sacrificeOptions.querySelectorAll('input').forEach((input) => { input.checked = false; });
+    const fieldingErrorOptions = $('#fielding-error-options');
+    fieldingErrorOptions.hidden = !['single', 'double', 'triple'].includes(play);
+    fieldingErrorOptions.disabled = !['single', 'double', 'triple'].includes(play);
+    fieldingErrorOptions.querySelector('input').checked = false;
     $('#runner-choices').innerHTML = runners.map(({ runner, index }) => runnerChoice(index, runner)).join('')
-      + (['single', 'double', 'triple', 'error', 'fielder-choice'].includes(play) ? runnerChoice('batter', batter, '打者')
+      + (['single', 'double', 'triple', 'fielder-choice'].includes(play) ? runnerChoice('batter', batter, '打者')
         : hitBases ? `<div class="runner-choice batter-choice"><span>打者</span><strong>${escapeHtml(batter)}</strong><span class="fixed-destination">全壘打回本壘</span></div>`
           : `<div class="runner-choice batter-choice"><span>打者</span><strong>${escapeHtml(batter)}</strong><span class="fixed-destination">${play === 'sacrifice' ? '犧牲打出局' : '打者出局'}</span></div>`);
     syncRunnerSelects();
@@ -1168,7 +1179,8 @@
       .filter(([key, value]) => key !== String(runnerKey) && (!fixedOut || key !== 'batter') && value === 0).length;
     const outUnavailable = selected !== 0 && state.outs + fixedOut + otherRunnerOuts >= 3;
     const isFielderChoiceBatter = pendingHit === 'fielder-choice' && String(runnerKey) === 'batter';
-    const batterCannotBeOut = (pendingHit === 'error' || isFielderChoiceBatter) && String(runnerKey) === 'batter';
+    const batterCannotBeOut = ($('#fielding-error-options input').checked || isFielderChoiceBatter)
+      && String(runnerKey) === 'batter';
     const options = batterCannotBeOut ? [] : [`<option value="0" ${outUnavailable ? 'disabled' : ''}>出局</option>`];
     bases.forEach((base, index) => {
       const destination = index + 1;
@@ -1193,6 +1205,13 @@
     const selected = pendingDestinations[key];
     return `<label class="runner-choice" data-runner-index="${key}"><span>${label}</span><strong>${escapeHtml(runner)}</strong><select name="runner-${key}">${destinationOptions(selected, key)}</select></label>`;
   }
+  function updateRunnerSubmitLabel() {
+    const errorOnlySingle = pendingHit === 'single'
+      && $('#fielding-error-options input').checked && pendingDestinations.batter === 1;
+    $('#runner-submit').textContent = errorOnlySingle
+      ? '記錄守備失誤'
+      : `記錄${playLabels[pendingHit] || pendingHit}`;
+  }
   function syncRunnerSelects() {
     $('#runner-choices').querySelectorAll('select[name^="runner-"]').forEach((select) => {
       const key = select.name.slice('runner-'.length);
@@ -1208,7 +1227,7 @@
           const fixedOut = Number(batterIsFixedOut());
           const otherRunnerOuts = Object.entries(pendingDestinations)
             .filter(([otherKey, value]) => otherKey !== key && (!fixedOut || otherKey !== 'batter') && value === 0).length;
-          option.disabled = pendingHit === 'error' && key === 'batter'
+          option.disabled = $('#fielding-error-options input').checked && key === 'batter'
             || pendingHit === 'fielder-choice' && key === 'batter'
             || pendingDestinations[key] !== 0
               && state.outs + fixedOut + otherRunnerOuts >= 3;
@@ -1221,6 +1240,7 @@
         option.textContent = runnerDestinationLabel(Number(option.value), key, occupiedByOther);
       });
     });
+    updateRunnerSubmitLabel();
   }
   function renderRunnerDragBoard() {
     $('#runner-pool').textContent = '拖曳跑者卡片至目標壘包；相同壘包的跑者會互換位置';
@@ -1256,7 +1276,7 @@
     const key = event.dataTransfer.getData('text/plain');
     const destination = Number(event.currentTarget.dataset.destination);
     const previous = pendingDestinations[key];
-    if (pendingHit === 'error' && key === 'batter' && destination === 0) {
+    if ($('#fielding-error-options input').checked && key === 'batter' && destination === 0) {
       showRunnerError('守備失誤時，打者不能記為出局。');
       return;
     }
@@ -1715,8 +1735,17 @@
       showRunnerError('出局數超過該局剩餘所需出局數。');
       return;
     }
-    if (pendingHit === 'error' && destinations.batter === 0) {
+    const fieldingError = data.has('fieldingError');
+    if (fieldingError && destinations.batter === 0) {
       showRunnerError('守備失誤時，打者不能記為出局。');
+      return;
+    }
+    if (fieldingError && pendingHit === 'double' && destinations.batter <= 2) {
+      showRunnerError('記錄二壘安打的守備失誤時，打者必須推進至三壘或本壘。');
+      return;
+    }
+    if (fieldingError && pendingHit === 'triple' && destinations.batter <= 3) {
+      showRunnerError('記錄三壘安打的守備失誤時，打者必須回本壘得分。');
       return;
     }
     if (pendingHit === 'fielder-choice'
@@ -1746,7 +1775,15 @@
     }
     clearRunnerError();
     $('#runner-dialog').close();
-    applyPlay(pendingHit, destinations, pendingHit === 'sacrifice' ? { sacrificeType } : {});
+    applyPlay(pendingHit, destinations, {
+      ...(pendingHit === 'sacrifice' ? { sacrificeType } : {}),
+      ...(fieldingError ? { fieldingError: true } : {})
+    });
+  });
+  $('#fielding-error-options input').addEventListener('change', () => {
+    clearRunnerError();
+    syncRunnerSelects();
+    renderRunnerDragBoard();
   });
 
   const stealDialog = $('#steal-dialog');
