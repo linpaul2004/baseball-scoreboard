@@ -284,6 +284,44 @@
   function canRecordUncaughtThirdStrike(gameState) {
     return gameState.strikes === 2 && (gameState.outs === 2 || !gameState.bases[0]);
   }
+  function forcedRunnerIndices(gameState) {
+    return gameState.bases.map((runner, index) =>
+      runner && gameState.bases.slice(0, index + 1).every(Boolean) ? index : -1)
+      .filter((index) => index >= 0);
+  }
+  function uncaughtStrikeDestinationsError(gameState, destinations) {
+    if (destinations.batter !== 1) return '不死三振時，打者固定上一壘。';
+    const forcedRunners = gameState.outs === 2 ? forcedRunnerIndices(gameState) : [];
+    let forcedRunnerOuts = 0;
+    for (const key of Object.keys(destinations)) {
+      if (key === 'batter') continue;
+      const index = Number(key);
+      if (!Number.isInteger(index) || String(index) !== key || !gameState.bases[index]) {
+        return '不死三振的跑者紀錄格式不正確。';
+      }
+    }
+    for (const [index, runner] of gameState.bases.entries()) {
+      if (!runner) continue;
+      const forced = forcedRunners.includes(index);
+      const expectedDestination = forced ? index + 2 : index + 1;
+      const destination = destinations[index];
+      if (destination === 0 && forced) {
+        forcedRunnerOuts += 1;
+      } else if (destination !== expectedDestination
+        && !(forced && Number.isInteger(destination) && destination >= 1 && destination <= index + 1)) {
+        return forced
+          ? '不死三振時，強迫進壘的跑者只允許改為退回原壘或出局。'
+          : '不死三振時，未強迫進壘的跑者不應推進。';
+      }
+    }
+    if (forcedRunnerOuts > 1) return '兩出局時，最多只能記錄一位跑者出局。';
+    return null;
+  }
+  function uncaughtStrikeRunnerIsFixed(runnerKey) {
+    if (pendingHit !== 'uncaught-third-strike') return false;
+    if (String(runnerKey) === 'batter') return true;
+    return state.outs !== 2 || !forcedRunnerIndices(state).includes(Number(runnerKey));
+  }
   function recordPlay(play) {
     if (state.gameOver) return;
     if (['steal', 'pickoff'].includes(play)) {
@@ -347,6 +385,10 @@
         defaults[index] = forced ? index + 2 : index + 1;
       });
       runnerDestinations = { ...defaults, ...(runnerDestinations || {}) };
+    }
+    if (play === 'uncaught-third-strike') {
+      const error = uncaughtStrikeDestinationsError(gameState, runnerDestinations);
+      if (error) throw new Error(error);
     }
     for (const [detail, label] of [['fieldingError', '守備失誤'], ['fieldingInterference', '妨礙守備']]) {
       if (details[detail] !== undefined && typeof details[detail] !== 'boolean') {
@@ -506,7 +548,6 @@
     } else {
       const hitBases = { single: 1, double: 2, triple: 3, 'home-run': 4 }[play];
       if (!hitBases) return gameState;
-      const batterDestination = runnerDestinations?.batter ?? (hitBases === 4 ? 4 : hitBases);
       if (details.fieldingError === true) next.teams[defense].errors += 1;
       if (!details.fieldingInterference) next.teams[offense].hits += 1;
       recordAppearance(next, activeBatter(next), playLabels[play]);
@@ -1213,7 +1254,9 @@
   }
   function updateRunnerDialogDescription() {
     const labels = { single: '一壘安打', double: '二壘安打', triple: '三壘安打' };
-    if ($('#fielding-play-options input[name="fieldingInterference"]').checked) {
+    if (pendingHit === 'uncaught-third-strike') {
+      $('#runner-dialog-description').textContent = '不死三振：打者固定上一壘；可選擇暴投或捕逸。';
+    } else if ($('#fielding-play-options input[name="fieldingInterference"]').checked) {
       $('#runner-dialog-description').textContent =
         `${labels[pendingHit]}：妨礙守備，打者出局；調整跑者推進結果。`;
     } else if (pendingHit === 'fielder-choice') {
@@ -1292,6 +1335,23 @@
   }
   function destinationOptions(selected, runnerKey) {
     const isBatter = String(runnerKey) === 'batter';
+    if (pendingHit === 'uncaught-third-strike') {
+      if (isBatter || uncaughtStrikeRunnerIsFixed(runnerKey)) {
+        const destination = isBatter ? 1 : Number(runnerKey) + 1;
+        return `<option value="${destination}" selected>${bases[destination - 1]}</option>`;
+      }
+      const forcedDestination = Number(runnerKey) + 2;
+      const originalBase = Number(runnerKey) + 1;
+      const otherRunnerOuts = Object.entries(pendingDestinations)
+        .filter(([key, value]) => key !== String(runnerKey) && key !== 'batter' && value === 0).length;
+      const outUnavailable = selected !== 0 && state.outs + otherRunnerOuts >= 3;
+      const forcedDestinationLabel = forcedDestination === 4 ? '本壘（得分）' : bases[forcedDestination - 1];
+      const retreatOptions = bases.slice(0, originalBase).map((base, index) => {
+        const destination = index + 1;
+        return `<option value="${destination}" ${selected === destination ? 'selected' : ''}>退回${base}</option>`;
+      });
+      return `<option value="${forcedDestination}" ${selected === forcedDestination ? 'selected' : ''}>${forcedDestinationLabel}</option>${retreatOptions.join('')}<option value="0" ${selected === 0 ? 'selected' : ''} ${outUnavailable ? 'disabled' : ''}>出局</option>`;
+    }
     if (isBatter && $('#fielding-play-options input[name="fieldingInterference"]').checked) {
       return '<option value="0" selected>出局</option>';
     }
@@ -1325,7 +1385,7 @@
     const selected = pendingDestinations[key];
     const fixedInterferenceOut = key === 'batter'
       && $('#fielding-play-options input[name="fieldingInterference"]').checked;
-    return `<label class="runner-choice" data-runner-index="${key}"><span>${label}</span><strong>${escapeHtml(runner)}</strong><select name="runner-${key}" ${fixedInterferenceOut ? 'disabled' : ''}>${destinationOptions(selected, key)}</select></label>`;
+    return `<label class="runner-choice" data-runner-index="${key}"><span>${label}</span><strong>${escapeHtml(runner)}</strong><select name="runner-${key}" ${fixedInterferenceOut || uncaughtStrikeRunnerIsFixed(key) ? 'disabled' : ''}>${destinationOptions(selected, key)}</select></label>`;
   }
   function updateRunnerSubmitLabel() {
     $('#runner-submit').textContent = `記錄${playLabels[pendingHit] || pendingHit}`;
@@ -1335,7 +1395,8 @@
       const key = select.name.slice('runner-'.length);
       select.value = String(pendingDestinations[key]);
       select.disabled = key === 'batter'
-        && $('#fielding-play-options input[name="fieldingInterference"]').checked;
+        && $('#fielding-play-options input[name="fieldingInterference"]').checked
+        || uncaughtStrikeRunnerIsFixed(key);
       select.onchange = () => {
         pendingDestinations[key] = Number(select.value);
         clearRunnerError();
@@ -1356,22 +1417,29 @@
         const occupiedByOther = Object.entries(pendingDestinations)
           .some(([otherKey, value]) => otherKey !== key && value === Number(option.value));
         option.disabled = occupiedByOther;
-        option.textContent = runnerDestinationLabel(Number(option.value), key, occupiedByOther);
+        const retreatingForcedRunner = pendingHit === 'uncaught-third-strike'
+          && !uncaughtStrikeRunnerIsFixed(key)
+          && Number(option.value) <= Number(key) + 1;
+        option.textContent = retreatingForcedRunner
+          ? `退回${bases[Number(option.value) - 1]}${occupiedByOther ? '（已有人）' : ''}`
+          : runnerDestinationLabel(Number(option.value), key, occupiedByOther);
       });
     });
     updateRunnerSubmitLabel();
   }
   function renderRunnerDragBoard() {
-    $('#runner-pool').textContent = '拖曳跑者卡片至目標壘包；相同壘包的跑者會互換位置';
+    $('#runner-pool').textContent = pendingHit === 'uncaught-third-strike'
+      ? '拖曳強迫進壘跑者至目標壘包或出局'
+      : '拖曳跑者至目標壘包；相同壘包的跑者會互換位置';
     document.querySelectorAll('.runner-destination').forEach((zone) => {
       const destination = Number(zone.dataset.destination);
       const occupants = Object.entries(pendingDestinations).filter(([, value]) => value === destination);
       zone.classList.toggle('drop-target', false);
       zone.querySelector('span').innerHTML = occupants.map(([index]) => {
         const runner = index === 'batter' ? batterName() : state.bases[Number(index)];
-        const fixed = index === 'batter' && (batterIsFixedOut() || pendingHit === 'home-run');
-        const fixedLabel = pendingHit === 'home-run' ? '打者得分' : '打者出局';
-        return `<span class="drag-runner ${fixed ? 'fixed-runner' : ''}" ${fixed ? '' : 'draggable="true"'} data-runner-index="${index}" title="${fixed ? fixedLabel : `拖曳以移動 ${escapeHtml(runner)}`}">${escapeHtml(runner)}${index === 'batter' ? '（打者）' : ''}</span>`;
+        const fixed = uncaughtStrikeRunnerIsFixed(index)
+          || index === 'batter' && batterIsFixedOut();
+        return `<span class="drag-runner ${fixed ? 'fixed-runner' : ''}" ${fixed ? '' : 'draggable="true"'} data-runner-index="${index}" title="${fixed ? '固定位置' : `拖曳以移動 ${escapeHtml(runner)}`}">${escapeHtml(runner)}${index === 'batter' ? '（打者）' : ''}</span>`;
       }).join('');
       zone.ondragover = onRunnerDragOver;
       zone.ondragleave = onRunnerDragLeave;
@@ -1395,6 +1463,16 @@
     const key = event.dataTransfer.getData('text/plain');
     const destination = Number(event.currentTarget.dataset.destination);
     const previous = pendingDestinations[key];
+    if (pendingHit === 'uncaught-third-strike') {
+      if (uncaughtStrikeRunnerIsFixed(key)) return;
+      const forcedDestination = Number(key) + 2;
+      const originalBase = Number(key) + 1;
+      const retreating = destination >= 1 && destination <= originalBase;
+      if (destination !== forcedDestination && !retreating && destination !== 0) {
+        showRunnerError('不死三振時，強迫進壘的跑者只允許改為退回原壘或出局。');
+        return;
+      }
+    }
     if (batterCannotBeOut() && key === 'batter' && destination === 0) {
       showRunnerError('守備失誤時，打者不能記為出局。');
       return;
@@ -1416,6 +1494,10 @@
     const occupant = destination >= 1 && destination <= 3
       ? Object.entries(pendingDestinations).find(([otherKey, value]) => otherKey !== key && value === destination)
       : null;
+    if (pendingHit === 'uncaught-third-strike' && occupant) {
+      showRunnerError('該壘包已有跑者，請先調整該跑者的結果。');
+      return;
+    }
     pendingDestinations[key] = destination;
     clearRunnerError();
     if (occupant) pendingDestinations[occupant[0]] = previous;
@@ -1858,6 +1940,13 @@
     if (hasDuplicateBase) {
       showRunnerError('同一壘包不能安排兩位跑者，請拖曳或選擇其他壘包。');
       return;
+    }
+    if (pendingHit === 'uncaught-third-strike') {
+      const uncaughtStrikeError = uncaughtStrikeDestinationsError(state, destinations);
+      if (uncaughtStrikeError) {
+        showRunnerError(uncaughtStrikeError);
+        return;
+      }
     }
     const fixedOut = batterIsFixedOut() ? 1 : 0;
     const runnerOuts = Object.entries(destinations)
