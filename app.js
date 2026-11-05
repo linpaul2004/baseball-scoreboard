@@ -281,6 +281,9 @@
     return !['intentional-walk', 'timeout-ball', 'timeout-strike', 'balk', 'steal', 'pickoff',
       'catcher-interference', 'other-interference'].includes(play);
   }
+  function canRecordUncaughtThirdStrike(gameState) {
+    return gameState.strikes === 2 && (gameState.outs === 2 || !gameState.bases[0]);
+  }
   function recordPlay(play) {
     if (state.gameOver) return;
     if (['steal', 'pickoff'].includes(play)) {
@@ -293,7 +296,7 @@
       return;
     }
     if (['fielding-error', 'uncaught-third-strike'].includes(play)) {
-      if (play === 'uncaught-third-strike' && state.strikes !== 2) return;
+      if (play === 'uncaught-third-strike' && !canRecordUncaughtThirdStrike(state)) return;
       openRunnerDialog(play);
       return;
     }
@@ -329,6 +332,9 @@
   }
   function applyPlayState(gameState, play, runnerDestinations, details = {}) {
     if (gameState.gameOver) return gameState;
+    if (play === 'uncaught-third-strike' && !canRecordUncaughtThirdStrike(gameState)) {
+      throw new Error('不死三振必須在兩好球且兩人出局或一壘無人的情況下記錄。');
+    }
     const next = clone(gameState);
     const offense = activeTeamIndex(next);
     const defense = fieldingTeamIndex(next);
@@ -922,7 +928,7 @@
     document.querySelector('[data-play="sacrifice"]').disabled = state.outs >= 2 || !state.bases.some(Boolean);
     document.querySelector('[data-play="fielder-choice"]').disabled = !state.bases.some(Boolean);
     document.querySelector('[data-play="balk"]').disabled = !state.bases.some(Boolean);
-    document.querySelector('[data-play="uncaught-third-strike"]').disabled = state.strikes !== 2;
+    document.querySelector('[data-play="uncaught-third-strike"]').disabled = !canRecordUncaughtThirdStrike(state);
     const hasRunners = state.bases.some(Boolean);
     $('#pinch-run-button').disabled = !hasRunners;
     $('#ball-dots').innerHTML = Array.from({ length: 3 }, (_, i) => `<span class="count-dot ball ${i < state.balls ? 'active' : ''}"></span>`).join('');
