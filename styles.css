@@ -304,6 +304,7 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .runner-choice { display: grid; grid-template-columns: 100px minmax(100px, 1fr) 150px; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .play-type-options, .runner-event-runners { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .play-type-options[hidden], .runner-event-runners[hidden] { display: none; }
+.play-type-options label[hidden] { display: none; }
 .play-type-options legend, .runner-event-runners legend { padding: 0 6px; color: #aebbad; font-size: 11px; }
 .runner-event-choices { display: flex; flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
 .pickoff-runner-options { display: block; }
@@ -538,6 +539,8 @@ body { min-width: 0; }
 .runner-board-toolbar { display: flex; min-height: 36px; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 8px; }
 .runner-pool { margin: 0; color: #9eaf9f; font-size: 12px; }
 .runner-board-toolbar .play-type-options { flex: 0 0 auto; justify-content: flex-end; margin: 0; border: 0; padding: 0; }
+#fielding-play-options { gap: 3px; padding: 2px; }
+#fielding-play-options label { min-height: 30px; gap: 5px; padding: 3px 5px; }
 .runner-destinations { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .runner-destination { display: grid; min-height: 104px; align-content: start; gap: 10px; border: 1px dashed #4c5b4f; border-radius: 9px; padding: 10px; background: #1b2920; transition: .14s ease; }
 .runner-destination[hidden] { display: none; }
@@ -577,8 +580,9 @@ body { min-width: 0; }
   .pitcher-count { min-width: auto; }
   .runner-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .runner-destination { min-height: 80px; }
-  .runner-board-toolbar { align-items: flex-start; }
-  .runner-pool { max-width: 60%; }
+  .runner-board-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .runner-pool { max-width: 100%; flex: 1 1 100%; }
+  .runner-board-toolbar .play-type-options { justify-content: flex-start; }
   .record-entry { grid-template-columns: 24px minmax(0, 1fr); }
   .record-meta { grid-column: 2; }
   .batter-history { grid-template-columns: 1fr; gap: 6px; }

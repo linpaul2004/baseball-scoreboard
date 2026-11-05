@@ -7,7 +7,7 @@
     <meta name="description" content="以逐球紀錄操作、重播與復原的棒球記分板。">
     <title>球場邊 — 棒球記分板</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=fielding-choice-options">
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -110,6 +110,7 @@
                   <button class="play-button play-button-highlight" data-play="home-run">全壘打<span>HOMERUN</span></button>
                   <button class="play-button sacrifice-button" data-play="sacrifice">犧牲打<span>SACRIFICE</span></button>
                   <button class="play-button" data-play="foul-bunt">觸擊界外<span>FOUL BUNT</span></button>
+                  <button class="play-button" data-play="fielding-error">守備失誤<span>FIELDING ERROR</span></button>
                   <button class="play-button" data-play="interference">妨礙守備<span>INTERFERENCE</span></button>
                 </div>
               </div>
@@ -121,6 +122,7 @@
                   <button class="play-button" data-play="pickoff">牽制出局<span>PICKOFF</span></button>
                   <button class="play-button" id="time-violation-button">超時違規<span>TIME VIOLATION</span></button>
                   <button class="play-button" data-play="balk">投手犯規<span>BALK</span></button>
+                  <button class="play-button" data-play="other-interference">妨礙守備<span>INTERFERENCE</span></button>
                   <button class="play-button" data-play="catcher-interference">妨礙打擊<span>CATCHER INTERFERENCE</span></button>
                 </div>
               </div>
@@ -269,8 +271,9 @@
         <div class="runner-drag-board" id="runner-board">
           <div class="runner-board-toolbar">
             <div class="runner-pool" id="runner-pool"></div>
-            <fieldset class="play-type-options" id="fielding-error-options" disabled hidden>
-              <label><input type="checkbox" name="fieldingError"><span>守備失誤</span></label>
+            <fieldset class="play-type-options fielding-play-options" id="fielding-play-options" disabled hidden>
+              <label id="fielding-error-label"><input type="checkbox" name="fieldingError"><span>守備失誤</span></label>
+              <label id="fielding-interference-label"><input type="checkbox" name="fieldingInterference"><span>妨礙守備</span></label>
             </fieldset>
           </div>
           <div class="runner-destinations">
@@ -282,6 +285,11 @@
           </div>
         </div>
         <div id="runner-choices" class="runner-choices"></div>
+        <fieldset class="play-type-options" id="uncaught-strike-options" disabled hidden>
+          <legend>不死三振原因（選填）</legend>
+          <label><input type="radio" name="uncaughtStrikeEvent" value="wild-pitch"><span>暴投</span></label>
+          <label><input type="radio" name="uncaughtStrikeEvent" value="passed-ball"><span>捕逸</span></label>
+        </fieldset>
         <fieldset class="play-type-options" id="sacrifice-type-options" disabled hidden>
           <legend>犧牲打類型（必選）</legend>
           <label><input type="radio" name="sacrificeType" value="bunt" required><span>犧牲觸擊</span></label>
