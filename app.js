@@ -560,7 +560,14 @@
     }
     if (event.type === 'runner') {
       const next = clone(previous);
-      if (['steal', 'wild-pitch', 'passed-ball'].includes(event.code) && Array.isArray(event.runners)) {
+      if (event.fieldingError !== undefined && typeof event.fieldingError !== 'boolean') {
+        throw new Error('守備失誤紀錄格式不正確。');
+      }
+      if (event.code === 'other'
+        && (typeof event.reason !== 'string' || !event.reason.trim())) {
+        throw new Error('其他跑壘事件必須填寫原因。');
+      }
+      if (['steal', 'wild-pitch', 'passed-ball', 'other'].includes(event.code) && Array.isArray(event.runners)) {
         const selected = event.runners;
         if (!selected.length || new Set(selected).size !== selected.length
           || selected.some((base) => !Number.isInteger(base) || base < 0 || base > 2 || !next.bases[base])) {
@@ -599,6 +606,9 @@
         if (next.outs >= 3) advanceHalfInning(next);
       } else {
         throw new Error(`不支援的跑壘事件：${event.code}`);
+      }
+      if (event.fieldingError === true) {
+        next.teams[fieldingTeamIndex(previous)].errors += 1;
       }
       return next;
     }
@@ -769,11 +779,12 @@
           ? `K ${label}` : label)
         : label;
     }
-    if (event.type === 'runner' && ['steal', 'wild-pitch', 'passed-ball'].includes(event.code)) {
+    if (event.type === 'runner' && ['steal', 'wild-pitch', 'passed-ball', 'other'].includes(event.code)) {
       const selected = event.runners || [event.from];
       const labels = { steal: '盜壘', 'wild-pitch': '暴投', 'passed-ball': '捕逸' };
       const advances = selected.map((base) => `${bases[base]} ➜ ${base === 2 ? '本壘' : `${bases[base + 1]}`}`);
-      return `${labels[event.code]}：${advances.join('；')}`;
+      const eventLabel = event.code === 'other' ? event.reason.trim() : labels[event.code];
+      return `${eventLabel}：${advances.join('；')}`;
     }
     if (event.type === 'runner' && event.code === 'pickoff') return `牽制出局：${before.bases[event.base]} 出局`;
     if (event.type === 'setup' && event.code === 'set-roster') return '更新比賽資訊與先發名單';
@@ -1932,10 +1943,16 @@
   }
   function updateRunnerEventSubmitLabel() {
     const eventType = $('#steal-form').elements.runnerEventType.value;
-    const labels = { steal: '盜壘', 'wild-pitch': '暴投', 'passed-ball': '捕逸' };
+    const labels = { steal: '盜壘', 'wild-pitch': '暴投', 'passed-ball': '捕逸', other: '其他' };
     $('#runner-event-submit').textContent = runnerEvent === 'pickoff'
       ? '記錄牽制出局'
       : eventType ? `記錄${labels[eventType]}` : '記錄';
+  }
+  function updateRunnerEventOptions() {
+    const otherSelected = $('#steal-form').elements.runnerEventType.value === 'other';
+    const reason = $('#runner-event-other-reason');
+    reason.required = otherSelected;
+    updateRunnerEventSubmitLabel();
   }
   function openRunnerEventDialog(eventType) {
     runnerEvent = eventType;
@@ -1954,12 +1971,15 @@
       : '選擇事件類型，並選擇因這次事件推進的跑者。';
     $('#runner-event-types').hidden = pickoff;
     $('#runner-event-types').disabled = pickoff;
+    $('#runner-fielding-options').hidden = pickoff;
     $('#steal-runner-options').hidden = pickoff;
     $('#pickoff-runner-field').hidden = !pickoff;
     runnerSelect.required = pickoff;
     runnerSelect.value = runnerSelect.options[0]?.value || '';
     form.querySelectorAll('input[name="runnerEventType"]').forEach((input) => { input.checked = false; });
-    updateRunnerEventSubmitLabel();
+    form.elements.runnerFieldingError.checked = false;
+    $('#runner-event-other-reason').value = '';
+    updateRunnerEventOptions();
     $('#steal-runner-choices').innerHTML = state.bases.map((runner, index) => runner
       ? `<label class="runner-event-choice"><input type="checkbox" name="runners" value="${index}"><span>${bases[index]} · ${escapeHtml(runner)}</span></label>` : '').join('');
     stealDialog.showModal();
@@ -1985,8 +2005,13 @@
     } else {
       const code = data.get('runnerEventType');
       const selected = data.getAll('runners').map(Number);
-      if (!['steal', 'wild-pitch', 'passed-ball'].includes(code)) {
+      if (!['steal', 'wild-pitch', 'passed-ball', 'other'].includes(code)) {
         showStealError('請選擇盜壘、暴投或捕逸。');
+        return;
+      }
+      const reason = String(data.get('runnerEventOtherReason') || '').trim();
+      if (code === 'other' && !reason) {
+        showStealError('請輸入其他事件的原因。');
         return;
       }
       if (!selected.length) {
@@ -2002,7 +2027,11 @@
         showStealError('前方壘包有跑者時，必須同時選擇該跑者推進。');
         return;
       }
-      addRecord({ type: 'runner', code, runners: selected });
+      addRecord({
+        type: 'runner', code, runners: selected,
+        ...(code === 'other' ? { reason } : {}),
+        ...(data.has('runnerFieldingError') ? { fieldingError: true } : {})
+      });
     }
     stealDialog.close();
   });
@@ -2014,7 +2043,7 @@
   $('#steal-form').elements.runner.addEventListener('change', clearStealError);
   $('#steal-form').addEventListener('change', clearStealError);
   $('#steal-form').querySelectorAll('input[name="runnerEventType"]')
-    .forEach((input) => input.addEventListener('change', updateRunnerEventSubmitLabel));
+    .forEach((input) => input.addEventListener('change', updateRunnerEventOptions));
 
   document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
   $('#export-button').addEventListener('click', () => {

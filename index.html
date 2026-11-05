@@ -307,6 +307,11 @@
           <label><input type="radio" name="runnerEventType" value="steal" required><span>盜壘</span></label>
           <label><input type="radio" name="runnerEventType" value="wild-pitch" required><span>暴投</span></label>
           <label><input type="radio" name="runnerEventType" value="passed-ball" required><span>捕逸</span></label>
+          <label><input type="radio" name="runnerEventType" value="other" required><span>其他：</span><input id="runner-event-other-reason" name="runnerEventOtherReason" type="text" maxlength="60" placeholder="輸入原因"></label>
+        </fieldset>
+        <fieldset class="play-type-options" id="runner-fielding-options">
+          <legend>守備紀錄</legend>
+          <label><input type="checkbox" name="runnerFieldingError"><span>記錄失誤</span></label>
         </fieldset>
         <fieldset class="runner-event-runners" id="steal-runner-options">
           <legend>跑者（可複選）</legend>
