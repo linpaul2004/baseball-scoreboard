@@ -1,5 +1,7 @@
 (() => {
   const STORAGE_KEY = 'ballpark-scoreboard-v5';
+  const ROSTER_STORAGE_KEY = 'ballpark-player-roster-v1';
+  const rosterPositions = new Set(['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'IF', 'OF', 'DH']);
   const positions = [
     ['P', '投手'], ['C', '捕手'], ['1B', '一壘手'], ['2B', '二壘手'], ['3B', '三壘手'],
     ['SS', '游擊手'], ['LF', '左外野手'], ['CF', '中外野手'], ['RF', '右外野手'], ['DH', '指定打擊']
@@ -43,6 +45,7 @@
     pitcherCounts: {}, plateAppearances: {}
   });
   let state = defaultState();
+  let playerRosters = [];
   let records = [];
   let cursor = 0;
   let selectedInning = 0;
@@ -139,6 +142,122 @@
       state = defaultState();
       showToast('無法讀取先前紀錄，已開始新比賽。');
     }
+  }
+
+  function parsePlayerRoster(text) {
+    const rosters = [];
+    const teamNames = new Set();
+    let currentRoster;
+    text.split(/\r?\n/).forEach((rawLine, index) => {
+      const line = rawLine.trim();
+      if (!line) return;
+      const fields = line.split(/\s+/);
+      if (fields.length === 1) {
+        if (teamNames.has(fields[0])) throw new Error(`第 ${index + 1} 行隊名重複：${fields[0]}`);
+        currentRoster = { team: fields[0], players: [] };
+        teamNames.add(fields[0]);
+        rosters.push(currentRoster);
+        return;
+      }
+      if (!currentRoster) throw new Error(`第 ${index + 1} 行前缺少隊名。`);
+      let number;
+      let position = '';
+      let name;
+      if (fields.length === 2) {
+        [number, name] = fields;
+      } else if (fields.length >= 3 && rosterPositions.has(fields[1])) {
+        [number, position] = fields;
+        name = fields.slice(2).join(' ');
+      } else {
+        throw new Error(`第 ${index + 1} 行格式錯誤，請使用「背號 姓名」或「背號 守備代號 姓名」。`);
+      }
+      if (!number || !name) throw new Error(`第 ${index + 1} 行缺少背號或姓名。`);
+      currentRoster.players.push({ number, position, name });
+    });
+    if (!rosters.length || rosters.some((roster) => !roster.players.length)) {
+      throw new Error('名單至少需要一隊，且每隊至少要有一位選手。');
+    }
+    return rosters;
+  }
+
+  function readSavedPlayerRoster() {
+    const saved = localStorage.getItem(ROSTER_STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) throw new Error('選手名單資料格式不正確。');
+      playerRosters = parsed.map((roster) => {
+        if (typeof roster.team !== 'string' || !roster.team.trim()
+          || !Array.isArray(roster.players) || !roster.players.length) {
+          throw new Error('選手名單資料格式不正確。');
+        }
+        const players = roster.players.map((player) => {
+          if (typeof player.number !== 'string' || typeof player.name !== 'string'
+            || typeof player.position !== 'string' || !player.number || !player.name) {
+            throw new Error('選手名單資料格式不正確。');
+          }
+          return player;
+        });
+        return { team: roster.team, players };
+      });
+    } catch (error) {
+      console.error('無法讀取已儲存的選手名單。', error);
+      localStorage.removeItem(ROSTER_STORAGE_KEY);
+      playerRosters = [];
+      showToast('無法讀取已儲存的選手名單，請重新上傳。');
+    }
+  }
+
+  function rosterForTeam(teamName) {
+    return playerRosters.find((roster) => roster.team === String(teamName || '').trim());
+  }
+
+  function sortRosterPlayers(players, pitcherOrder = '') {
+    return [...players].sort((first, second) =>
+      (pitcherOrder === 'first' ? Number(second.position === 'P') - Number(first.position === 'P')
+        : pitcherOrder === 'last' ? Number(first.position === 'P') - Number(second.position === 'P') : 0)
+      || first.number.localeCompare(second.number, undefined, { numeric: true, sensitivity: 'base' })
+      || first.name.localeCompare(second.name, undefined, { numeric: true, sensitivity: 'base' }));
+  }
+
+  function renderRosterOptions(list, roster, pitcherOrder = '') {
+    list.innerHTML = roster
+      ? sortRosterPlayers(roster.players, pitcherOrder).map((player) =>
+        `<option value="${escapeHtml(player.name)}" label="#${escapeHtml(player.number)}${player.position ? ` · ${escapeHtml(player.position)}` : ''}"></option>`
+      ).join('')
+      : '';
+  }
+
+  function renderTeamRosterOptions(teamIndex, teamName) {
+    const prefix = teamIndex === 0 ? 'away' : 'home';
+    const roster = rosterForTeam(teamName);
+    renderRosterOptions($(`#${prefix}-players`), roster, 'last');
+    renderRosterOptions($(`#${prefix}-pitchers`), roster, 'first');
+    $('#lineup-form').querySelectorAll(`[data-roster-team="${teamIndex}"]`).forEach((input) => {
+      const listId = input.name === `${prefix}PitcherName` ? `${prefix}-pitchers` : `${prefix}-players`;
+      if (roster) input.setAttribute('list', listId);
+      else input.removeAttribute('list');
+    });
+  }
+
+  function renderRosterDialog() {
+    const status = $('#roster-status');
+    const list = $('#roster-list');
+    $('#clear-roster-button').disabled = !playerRosters.length;
+    if (!playerRosters.length) {
+      status.textContent = '尚未上傳選手名單。';
+      list.innerHTML = '';
+      return;
+    }
+    const totalPlayers = playerRosters.reduce((sum, roster) => sum + roster.players.length, 0);
+    status.textContent = `已載入 ${playerRosters.length} 隊、${totalPlayers} 位選手。`;
+    list.innerHTML = playerRosters.map((roster) => `
+      <section class="roster-team">
+        <h3>${escapeHtml(roster.team)}</h3>
+        <p>${sortRosterPlayers(roster.players).map((player) =>
+          `#${escapeHtml(player.number)}${player.position ? ` ${escapeHtml(player.position)}` : ''} ${escapeHtml(player.name)}`
+        ).join('、')}</p>
+      </section>`).join('');
   }
 
   function saveAndRender() {
@@ -750,21 +869,45 @@
   }
 
   function renderLineup() {
+    const form = $('#lineup-form');
     [0, 1].forEach((teamIndex) => {
       const team = state.teams[teamIndex];
       const id = teamIndex === 0 ? 'away' : 'home';
+      renderTeamNameField(teamIndex, team.name);
       $(`#${id}-lineup-title`).textContent = `${team.name}先發`;
-      const form = $('#lineup-form');
       form.elements[`${id}PitcherName`].value = team.pitcher.name || '';
       form.elements[`${id}PitcherNumber`].value = team.pitcher.number;
       $(`#${id}-lineup`).innerHTML = team.lineup.map((player, index) => `
         <div class="lineup-row">
           <span class="lineup-order">${index + 1} 棒</span>
-          <input name="${id}-name-${index}" aria-label="${team.name}第${index + 1}棒姓名" maxlength="30" value="${escapeHtml(player.name)}">
+          <input name="${id}-name-${index}" aria-label="${team.name}第${index + 1}棒姓名" maxlength="30" list="${id}-players" data-roster-team="${teamIndex}" data-roster-number-field="${id}-number-${index}" value="${escapeHtml(player.name)}">
           <select name="${id}-position-${index}" aria-label="${team.name}第${index + 1}棒守位">${positionOptions(player.position === 'P' ? 'DH' : player.position)}</select>
           <input name="${id}-number-${index}" aria-label="${team.name}第${index + 1}棒背號" maxlength="6" value="${escapeHtml(player.number)}">
         </div>`).join('');
+      renderTeamRosterOptions(teamIndex, form.elements[`${id}Name`].value);
     });
+  }
+
+  function renderTeamNameField(teamIndex, selectedTeam) {
+    const id = teamIndex === 0 ? 'away' : 'home';
+    const label = $(`#${id}-team-name-field`);
+    const teamLabel = teamIndex === 0 ? '客隊名稱' : '主隊名稱';
+    if (playerRosters.length) {
+      label.innerHTML = `${teamLabel}<select name="${id}Name" required><option value="" disabled>選擇隊伍</option>${playerRosters.map((roster) =>
+        `<option value="${escapeHtml(roster.team)}">${escapeHtml(roster.team)}</option>`
+      ).join('')}</select>`;
+      const teamSelect = $('#lineup-form').elements[`${id}Name`];
+      teamSelect.value = playerRosters.some((roster) => roster.team === selectedTeam) ? selectedTeam : '';
+      return;
+    }
+    label.innerHTML = `${teamLabel}<input name="${id}Name" maxlength="24" required>`;
+    $('#lineup-form').elements[`${id}Name`].value = selectedTeam;
+  }
+
+  function syncRosterNumber(nameInput, teamName, numberInput) {
+    const player = rosterForTeam(teamName)?.players.find((candidate) =>
+      candidate.name === nameInput.value.trim());
+    if (player) numberInput.value = player.number;
   }
 
   function positionOptions(selected = '') {
@@ -1146,17 +1289,18 @@
         ? Math.max(0, teamRuns(after.teams[battingTeam]) - teamRuns(before.teams[battingTeam])) : 0;
       const strikePitches = [
         'swinging-strike', 'called-strike', 'foul-tip', 'foul-bunt', 'foul', 'uncaught-third-strike',
+        'timeout-strike',
         'fly-out', 'ground-out', 'fielder-choice', 'interference',
         'single', 'double', 'triple', 'home-run', 'sacrifice'
       ];
       const pitchingEvent = event.type === 'play'
-        && (actualPitch(event.code) || plateAppearanceEnded || runsAllowed > 0);
+        && (actualPitch(event.code) || event.code === 'timeout-strike' || plateAppearanceEnded || runsAllowed > 0);
       const runnerOutEvent = event.type === 'runner' && ['pickoff', 'caught-stealing'].includes(event.code);
       if (pitchingEvent || runnerOutEvent || runsAllowed > 0) {
         const pitcherStats = ensurePitcher(pitcherTeam, pitcher);
         if (pitcherStats) {
-          if (pitchingEvent && actualPitch(event.code)) {
-            pitcherStats.pitches += 1;
+          if (pitchingEvent) {
+            if (actualPitch(event.code)) pitcherStats.pitches += 1;
             if (strikePitches.includes(playCode)) pitcherStats.strikes += 1;
           }
           if (plateAppearanceEnded) pitcherStats.batters += 1;
@@ -1742,6 +1886,54 @@
   });
 
   const lineupDialog = $('#lineup-dialog');
+  const rosterDialog = $('#roster-dialog');
+  $('#roster-button').addEventListener('click', () => {
+    renderRosterDialog();
+    rosterDialog.showModal();
+  });
+  $('#clear-roster-button').addEventListener('click', () => {
+    try {
+      localStorage.removeItem(ROSTER_STORAGE_KEY);
+      playerRosters = [];
+      [0, 1].forEach((teamIndex) => renderTeamRosterOptions(teamIndex, state.teams[teamIndex].name));
+      renderRosterOptions($('#substitution-players'), null);
+      $('#substitution-form').elements.name.removeAttribute('list');
+      renderRosterDialog();
+      $('#roster-error').hidden = true;
+      $('#roster-error').textContent = '';
+      showToast('已清除已載入的選手名單。');
+    } catch (error) {
+      console.error('清除選手名單失敗。', error);
+      showToast('無法清除選手名單，請稍後再試。');
+    }
+  });
+  $('#roster-file').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const errorElement = $('#roster-error');
+    errorElement.hidden = true;
+    errorElement.textContent = '';
+    try {
+      if (file.size > 5 * 1024 * 1024) throw new Error('檔案超過 5 MB，無法上傳。');
+      const parsed = parsePlayerRoster(await file.text());
+      localStorage.setItem(ROSTER_STORAGE_KEY, JSON.stringify(parsed));
+      playerRosters = parsed;
+      renderRosterDialog();
+      [0, 1].forEach((teamIndex) => {
+        const teamKey = teamIndex === 0 ? 'away' : 'home';
+        const teamName = lineupDialog.open
+          ? $('#lineup-form').elements[`${teamKey}Name`].value
+          : state.teams[teamIndex].name;
+        renderTeamRosterOptions(teamIndex, teamName);
+      });
+    } catch (error) {
+      console.error('上傳選手名單失敗。', error);
+      errorElement.textContent = error instanceof Error ? error.message : '上傳失敗，請檢查文字檔格式。';
+      errorElement.hidden = false;
+    } finally {
+      event.target.value = '';
+    }
+  });
   $('#lineup-button').addEventListener('click', () => {
     const form = $('#lineup-form');
     form.elements.awayName.value = state.teams[0].name;
@@ -1749,6 +1941,30 @@
     form.elements.gameInfo.value = state.gameInfo;
     renderLineup();
     lineupDialog.showModal();
+  });
+  $('#lineup-form').addEventListener('input', (event) => {
+    const input = event.target;
+    const form = event.currentTarget;
+    if (input.name === 'awayName' || input.name === 'homeName') {
+      renderTeamRosterOptions(input.name === 'awayName' ? 0 : 1, input.value);
+      return;
+    }
+    if (!input.dataset.rosterTeam) return;
+    const teamIndex = Number(input.dataset.rosterTeam);
+    const teamName = form.elements[teamIndex === 0 ? 'awayName' : 'homeName'].value;
+    syncRosterNumber(input, teamName, form.elements[input.dataset.rosterNumberField]);
+  });
+  $('#lineup-form').addEventListener('change', (event) => {
+    const input = event.target;
+    if (input.name === 'awayName' || input.name === 'homeName') {
+      renderTeamRosterOptions(input.name === 'awayName' ? 0 : 1, input.value);
+      return;
+    }
+    if (!input.dataset.rosterTeam) return;
+    const teamIndex = Number(input.dataset.rosterTeam);
+    const form = event.currentTarget;
+    syncRosterNumber(input, form.elements[teamIndex === 0 ? 'awayName' : 'homeName'].value,
+      form.elements[input.dataset.rosterNumberField]);
   });
   $('#lineup-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1868,7 +2084,22 @@
     $('#incoming-name-field').hidden = swapping;
     $('#incoming-number-field').hidden = swapping;
     form.elements.name.required = !swapping;
+    form.elements.name.dataset.rosterTeam = String(teamIndex);
+    const roster = rosterForTeam(team.name);
+    if (roster) form.elements.name.setAttribute('list', 'substitution-players');
+    else form.elements.name.removeAttribute('list');
+    renderRosterOptions($('#substitution-players'), roster,
+      substitutionMode === 'defense' && defenseMode === 'replace' && form.elements.slot.value === 'pitcher'
+        ? 'first' : 'last');
   }
+  function syncSubstitutionRosterNumber() {
+    const form = $('#substitution-form');
+    const teamIndex = Number(form.elements.name.dataset.rosterTeam);
+    const team = state.teams[teamIndex];
+    if (team) syncRosterNumber(form.elements.name, team.name, form.elements.number);
+  }
+  $('#substitution-form').elements.name.addEventListener('input', syncSubstitutionRosterNumber);
+  $('#substitution-form').elements.name.addEventListener('change', syncSubstitutionRosterNumber);
   $('#substitution-form').elements.slot.addEventListener('change', updateSubstitutionSlots);
   $('#substitution-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -2214,6 +2445,7 @@
     renderStatsDialog();
   });
   window.addEventListener('resize', updateGameOverHistoryHeight);
+  readSavedPlayerRoster();
   readSavedGame();
   render();
   loadVersion();

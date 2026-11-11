@@ -26,9 +26,7 @@ button { color: inherit; }
 .brand { display: flex; align-items: center; gap: 10px; color: #edf2e9; text-decoration: none; font-weight: 800; letter-spacing: .04em; }
 .brand-mark { display: block; width: 30px; height: 30px; border-radius: 9px; }
 .topbar-actions { display: flex; align-items: center; gap: 9px; }
-.live-label, .eyebrow, .keyboard-hint, .count-label, .count-line b, .count-letter, .out-group strong small, .inning-indicator, .action-group h3, .play-button > span, .field-position, .field-team, .footer-note, .log-stats, .half-inning-tag { font-family: var(--mono); }
-.live-label { display: flex; align-items: center; gap: 8px; margin-right: 14px; color: #8fa093; font-size: 10px; letter-spacing: .08em; }
-.live-label > span { width: 7px; height: 7px; border-radius: 50%; background: #a8ed64; box-shadow: 0 0 12px #a8ed6480; }
+.eyebrow, .keyboard-hint, .count-label, .count-line b, .count-letter, .out-group strong small, .inning-indicator, .action-group h3, .play-button > span, .field-position, .field-team, .footer-note, .log-stats, .half-inning-tag { font-family: var(--mono); }
 .button { border: 1px solid var(--line); border-radius: 8px; padding: 9px 13px; cursor: pointer; font-size: 12px; font-weight: 600; transition: .16s ease; }
 .button:hover:not(:disabled) { border-color: #63775e; background-color: #25342a; }
 .button-quiet { color: #c8d1c7; background: transparent; }
@@ -411,6 +409,14 @@ body { min-width: 0; }
   margin: auto;
 }
 .lineup-dialog { width: min(1120px, calc(100vw - 32px)); }
+.roster-dialog { width: min(720px, calc(100vw - 32px)); }
+.roster-upload { display: grid; gap: 7px; color: #aebbad; font-size: 11px; }
+.roster-upload input { width: 100%; color: #dce6d9; font-size: 11px; }
+.roster-status { margin: 14px 0 8px; color: #c8f36b; font-size: 11px; }
+.roster-list { display: grid; gap: 9px; max-height: 45vh; overflow: auto; }
+.roster-team { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #111a15; }
+.roster-team h3 { margin: 0 0 6px; color: #e8eee5; font-size: 12px; }
+.roster-team p { margin: 0; color: #aebbad; font-size: 11px; line-height: 1.8; }
 .runner-choice { grid-template-columns: minmax(76px, .65fr) minmax(90px, 1fr) minmax(120px, 1fr); }
 .fixed-destination { color: #f2b5a5; }
 .drag-runner { font-size: 12px; }

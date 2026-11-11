@@ -7,14 +7,14 @@
     <meta name="description" content="以逐球紀錄操作、重播與復原的棒球記分板。">
     <title>球場邊 — 棒球記分板</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="styles.css?v=fielding-choice-options">
+    <link rel="stylesheet" href="styles.css?v=player-roster">
     <script src="app.js" defer></script>
   </head>
   <body>
     <header class="topbar">
       <a class="brand" href="#" aria-label="球場邊首頁"><img class="brand-mark" src="favicon.svg" alt="">球場邊</a>
       <div class="topbar-actions">
-        <span class="live-label"><span></span> LIVE SCORING</span>
+        <button class="button button-quiet" id="roster-button" type="button">選手名單</button>
         <button class="button button-quiet" id="lineup-button" type="button">比賽資訊／先發名單</button>
         <button class="button button-quiet" id="defense-change-button" type="button">更換守備</button>
         <button class="button button-quiet" id="pinch-hit-button" type="button">代打</button>
@@ -23,6 +23,27 @@
         <button class="button button-quiet" id="new-game-button" type="button">重設比賽</button>
       </div>
     </header>
+
+    <dialog id="roster-dialog" class="setup-dialog roster-dialog">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">PLAYER ROSTER</p><h2>選手名單</h2></div>
+        <button class="dialog-close" data-close="roster-dialog" type="button" aria-label="關閉">×</button>
+      </div>
+      <p class="dialog-description">格式：隊名後列出「背號 守備代號 姓名」或「背號 姓名」。</p>
+      <label class="roster-upload">選擇文字檔<input id="roster-file" type="file" accept=".txt,text/plain"></label>
+      <p id="roster-error" class="lineup-error" role="alert" hidden></p>
+      <p id="roster-status" class="roster-status" aria-live="polite"></p>
+      <div id="roster-list" class="roster-list"></div>
+      <div class="dialog-actions">
+        <button class="button button-quiet" id="clear-roster-button" type="button" disabled>清除已載入名單</button>
+        <button class="button button-quiet" data-close="roster-dialog" type="button">關閉</button>
+      </div>
+    </dialog>
+    <datalist id="away-players"></datalist>
+    <datalist id="away-pitchers"></datalist>
+    <datalist id="home-players"></datalist>
+    <datalist id="home-pitchers"></datalist>
+    <datalist id="substitution-players"></datalist>
 
     <main class="page-shell">
       <section class="game-heading">
@@ -234,13 +255,13 @@
         </div>
         <p class="dialog-description">編輯完成會新增一筆紀錄。每隊可設定先發投手及 1 至 9 棒球員姓名、守備位置（含 DH 指定打擊）與背號；同隊守位不可重複。</p>
         <div class="form-grid game-info-fields">
-          <label>客隊名稱<input name="awayName" maxlength="24" required></label>
-          <label>主隊名稱<input name="homeName" maxlength="24" required></label>
+          <label id="away-team-name-field">客隊名稱<input name="awayName" maxlength="24" required></label>
+          <label id="home-team-name-field">主隊名稱<input name="homeName" maxlength="24" required></label>
           <label class="game-info-wide">比賽資訊<input name="gameInfo" maxlength="50"></label>
         </div>
         <div class="lineup-teams">
-          <fieldset class="lineup-fieldset"><legend id="away-lineup-title">客隊先發</legend><div class="starting-pitcher"><label>先發投手<input name="awayPitcherName" maxlength="30"></label><label>背號<input name="awayPitcherNumber" maxlength="6"></label></div><div class="lineup-head"><span>棒次</span><span>球員姓名</span><span>守位</span><span>背號</span></div><div id="away-lineup"></div></fieldset>
-          <fieldset class="lineup-fieldset"><legend id="home-lineup-title">主隊先發</legend><div class="starting-pitcher"><label>先發投手<input name="homePitcherName" maxlength="30"></label><label>背號<input name="homePitcherNumber" maxlength="6"></label></div><div class="lineup-head"><span>棒次</span><span>球員姓名</span><span>守位</span><span>背號</span></div><div id="home-lineup"></div></fieldset>
+          <fieldset class="lineup-fieldset"><legend id="away-lineup-title">客隊先發</legend><div class="starting-pitcher"><label>先發投手<input name="awayPitcherName" maxlength="30" data-roster-team="0" data-roster-number-field="awayPitcherNumber"></label><label>背號<input name="awayPitcherNumber" maxlength="6"></label></div><div class="lineup-head"><span>棒次</span><span>球員姓名</span><span>守位</span><span>背號</span></div><div id="away-lineup"></div></fieldset>
+          <fieldset class="lineup-fieldset"><legend id="home-lineup-title">主隊先發</legend><div class="starting-pitcher"><label>先發投手<input name="homePitcherName" maxlength="30" data-roster-team="1" data-roster-number-field="homePitcherNumber"></label><label>背號<input name="homePitcherNumber" maxlength="6"></label></div><div class="lineup-head"><span>棒次</span><span>球員姓名</span><span>守位</span><span>背號</span></div><div id="home-lineup"></div></fieldset>
         </div>
         <p id="lineup-error" class="lineup-error" role="alert" hidden></p>
         <div class="dialog-actions">
@@ -339,8 +360,8 @@
       </div>
       <p class="dialog-description">選擇違規方。</p>
       <div class="action-buttons">
-        <button class="play-button" data-timeout-play="timeout-strike">投球超時<span>超時好球</span></button>
-        <button class="play-button" data-timeout-play="timeout-ball">打擊超時<span>超時壞球</span></button>
+        <button class="play-button" data-timeout-play="timeout-ball">投球超時<span>超時壞球</span></button>
+        <button class="play-button" data-timeout-play="timeout-strike">打擊超時<span>超時好球</span></button>
       </div>
       <div class="dialog-actions">
         <button class="button button-quiet" data-close="time-violation-dialog" type="button">取消</button>
