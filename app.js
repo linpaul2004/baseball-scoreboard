@@ -1025,7 +1025,7 @@
     let { balls, strikes } = before;
     if (event.code === 'ball' || event.code === 'timeout-ball' || event.code === 'hbp') balls += 1;
     else if (event.code === 'foul') strikes = Math.min(strikes + 1, 2);
-    else if (['swinging-strike', 'foul-tip', 'called-strike', 'timeout-strike', 'uncaught-third-strike'].includes(event.code)) {
+    else if (['swinging-strike', 'foul-tip', 'foul-bunt', 'called-strike', 'timeout-strike', 'uncaught-third-strike'].includes(event.code)) {
       strikes += 1;
     }
     return `${balls}-${strikes}`;
