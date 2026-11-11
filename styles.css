@@ -30,6 +30,8 @@ button { color: inherit; }
 .button { border: 1px solid var(--line); border-radius: 8px; padding: 9px 13px; cursor: pointer; font-size: 12px; font-weight: 600; transition: .16s ease; }
 .button:hover:not(:disabled) { border-color: #63775e; background-color: #25342a; }
 .button-quiet { color: #c8d1c7; background: transparent; }
+.button.has-roster { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 2px #c8f36b33; }
+.button.has-roster:hover:not(:disabled) { border-color: #e3ffad; background: #e3ffad; color: #17200f; }
 .button-primary { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); font-weight: 700; }
 .button-primary:hover:not(:disabled) { border-color: #e3ffad; background: #e3ffad; color: #17200f; }
 .button:disabled { cursor: not-allowed; opacity: .4; }
@@ -410,8 +412,8 @@ body { min-width: 0; }
 }
 .lineup-dialog { width: min(1120px, calc(100vw - 32px)); }
 .roster-dialog { width: min(720px, calc(100vw - 32px)); }
-.roster-upload { display: grid; gap: 7px; color: #aebbad; font-size: 11px; }
-.roster-upload input { width: 100%; color: #dce6d9; font-size: 11px; }
+.roster-upload { display: grid; gap: 7px; color: #aebbad; font-size: 12px; }
+.roster-upload input { width: 100%; color: #dce6d9; font-size: 12px; }
 .roster-status { margin: 14px 0 8px; color: #c8f36b; font-size: 11px; }
 .roster-list { display: grid; gap: 9px; max-height: 45vh; overflow: auto; }
 .roster-team { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #111a15; }

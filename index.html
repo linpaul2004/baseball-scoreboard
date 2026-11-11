@@ -7,7 +7,7 @@
     <meta name="description" content="以逐球紀錄操作、重播與復原的棒球記分板。">
     <title>球場邊 — 棒球記分板</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="styles.css?v=player-roster">
+    <link rel="stylesheet" href="styles.css">
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -18,7 +18,7 @@
         <button class="button button-quiet" id="lineup-button" type="button">比賽資訊／先發名單</button>
         <button class="button button-quiet" id="defense-change-button" type="button">更換守備</button>
         <button class="button button-quiet" id="pinch-hit-button" type="button">代打</button>
-        <button class="button button-quiet" id="pinch-run-button" type="button">代跑</button>
+        <button class="button button-quiet" id="pinch-run-button" type="button" disabled>代跑</button>
         <button class="button button-quiet" id="setup-button" type="button">直接設定</button>
         <button class="button button-quiet" id="new-game-button" type="button">重設比賽</button>
       </div>
@@ -30,7 +30,7 @@
         <button class="dialog-close" data-close="roster-dialog" type="button" aria-label="關閉">×</button>
       </div>
       <p class="dialog-description">格式：隊名後列出「背號 守備代號 姓名」或「背號 姓名」。</p>
-      <label class="roster-upload">選擇文字檔<input id="roster-file" type="file" accept=".txt,text/plain"></label>
+      <label class="roster-upload">選擇檔案<input id="roster-file" type="file" accept=".txt,text/plain"></label>
       <p id="roster-error" class="lineup-error" role="alert" hidden></p>
       <p id="roster-status" class="roster-status" aria-live="polite"></p>
       <div id="roster-list" class="roster-list"></div>

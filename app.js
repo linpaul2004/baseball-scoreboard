@@ -58,6 +58,7 @@
 
   function activeTeamIndex(gameState = state) { return gameState.half === 'top' ? 0 : 1; }
   function fieldingTeamIndex(gameState = state) { return 1 - activeTeamIndex(gameState); }
+  function hasRunners(gameState = state) { return gameState.bases.some(Boolean); }
   function activeBatter(gameState = state) {
     const teamIndex = activeTeamIndex(gameState);
     const lineup = gameState.teams[teamIndex].lineup;
@@ -240,12 +241,20 @@
     });
   }
 
+  function updateRosterButton() {
+    const hasRoster = playerRosters.length > 0;
+    const button = $('#roster-button');
+    button.classList.toggle('has-roster', hasRoster);
+    button.textContent = hasRoster ? '選手名單（已載入）' : '選手名單';
+  }
+
   function renderRosterDialog() {
     const status = $('#roster-status');
     const list = $('#roster-list');
+    updateRosterButton();
     $('#clear-roster-button').disabled = !playerRosters.length;
     if (!playerRosters.length) {
-      status.textContent = '尚未上傳選手名單。';
+      status.textContent = '尚未載入選手名單。';
       list.innerHTML = '';
       return;
     }
@@ -1116,13 +1125,12 @@
     document.querySelector('[data-play="fielder-choice"]').disabled = !state.bases.some(Boolean);
     document.querySelector('[data-play="balk"]').disabled = !state.bases.some(Boolean);
     document.querySelector('[data-play="uncaught-third-strike"]').disabled = !canRecordUncaughtThirdStrike(state);
-    const hasRunners = state.bases.some(Boolean);
-    $('#pinch-run-button').disabled = !hasRunners;
+    const runnersOnBase = hasRunners();
     $('#ball-dots').innerHTML = Array.from({ length: 3 }, (_, i) => `<span class="count-dot ball ${i < state.balls ? 'active' : ''}"></span>`).join('');
     $('#strike-dots').innerHTML = Array.from({ length: 2 }, (_, i) => `<span class="count-dot strike ${i < state.strikes ? 'active' : ''}"></span>`).join('');
     $('#out-lights').innerHTML = Array.from({ length: 2 }, (_, i) => `<span class="out-light ${i < state.outs ? 'active' : ''}"></span>`).join('');
-    document.querySelector('[data-play="steal"]').disabled = !hasRunners;
-    document.querySelector('[data-play="pickoff"]').disabled = !hasRunners;
+    document.querySelector('[data-play="steal"]').disabled = !runnersOnBase;
+    document.querySelector('[data-play="pickoff"]').disabled = !runnersOnBase;
     const pitcher = currentPitcher();
     $('#at-bat-pitch-count').textContent = state.batterPitchCount;
     $('#pitch-count').textContent = pitcher ? state.pitcherCounts[pitcher.id] || 0 : 0;
@@ -1172,6 +1180,7 @@
     $('#delete-current-button').disabled = cursor === 0;
     document.querySelectorAll('.topbar-actions button:not(#new-game-button)')
       .forEach((button) => { button.disabled = state.gameOver; });
+    $('#pinch-run-button').disabled = state.gameOver || !runnersOnBase;
     renderHistory();
   }
 
@@ -1888,6 +1897,8 @@
   const lineupDialog = $('#lineup-dialog');
   const rosterDialog = $('#roster-dialog');
   $('#roster-button').addEventListener('click', () => {
+    $('#roster-file').value = '';
+    $('#roster-error').hidden = true;
     renderRosterDialog();
     rosterDialog.showModal();
   });
@@ -1900,19 +1911,19 @@
       $('#substitution-form').elements.name.removeAttribute('list');
       renderRosterDialog();
       $('#roster-error').hidden = true;
-      $('#roster-error').textContent = '';
       showToast('已清除已載入的選手名單。');
     } catch (error) {
       console.error('清除選手名單失敗。', error);
       showToast('無法清除選手名單，請稍後再試。');
     }
   });
+  $('#roster-file').addEventListener('click', (event) => {
+    event.currentTarget.value = '';
+  });
   $('#roster-file').addEventListener('change', async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const errorElement = $('#roster-error');
-    errorElement.hidden = true;
-    errorElement.textContent = '';
+    $('#roster-error').hidden = true;
     try {
       if (file.size > 5 * 1024 * 1024) throw new Error('檔案超過 5 MB，無法上傳。');
       const parsed = parsePlayerRoster(await file.text());
@@ -1920,17 +1931,12 @@
       playerRosters = parsed;
       renderRosterDialog();
       [0, 1].forEach((teamIndex) => {
-        const teamKey = teamIndex === 0 ? 'away' : 'home';
-        const teamName = lineupDialog.open
-          ? $('#lineup-form').elements[`${teamKey}Name`].value
-          : state.teams[teamIndex].name;
-        renderTeamRosterOptions(teamIndex, teamName);
+        renderTeamRosterOptions(teamIndex, state.teams[teamIndex].name);
       });
     } catch (error) {
       console.error('上傳選手名單失敗。', error);
-      errorElement.textContent = error instanceof Error ? error.message : '上傳失敗，請檢查文字檔格式。';
-      errorElement.hidden = false;
-    } finally {
+      $('#roster-error').textContent = error instanceof Error ? error.message : '上傳失敗，請檢查檔案格式。';
+      $('#roster-error').hidden = false;
       event.target.value = '';
     }
   });
@@ -2399,7 +2405,7 @@
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast('已匯出逐球紀錄文字檔。');
+    showToast('已匯出逐球紀錄。');
   });
   $('#import-button').addEventListener('click', () => $('#import-file').click());
   $('#import-file').addEventListener('change', async (event) => {
@@ -2422,7 +2428,7 @@
       showToast(`已匯入 ${records.length} 筆逐球紀錄。`);
     } catch (error) {
       console.error('匯入逐球紀錄失敗。', error);
-      showToast(error instanceof Error ? error.message : '匯入失敗，請檢查文字檔格式。');
+      showToast(error instanceof Error ? error.message : '匯入失敗，請檢查檔案格式。');
     } finally {
       event.target.value = '';
     }
@@ -2446,6 +2452,7 @@
   });
   window.addEventListener('resize', updateGameOverHistoryHeight);
   readSavedPlayerRoster();
+  updateRosterButton();
   readSavedGame();
   render();
   loadVersion();
