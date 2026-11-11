@@ -509,7 +509,7 @@ body { min-width: 0; }
   .pos-cf { top: 39px; left: 50%; }
   .pos-lf { top: 76px; left: 12%; }
   .pos-rf { top: 76px; left: 88%; right: auto; }
-  .pos-2b { top: 86px; left: 50%; right: auto; }
+  .pos-2b { top: 132px; left: calc(50% + 66px); right: auto; }
   .pos-3b { top: 176px; left: calc(50% - 90px); transform: translate(-100%, -50%); }
   .pos-1b { top: 176px; left: auto; right: calc(50% - 90px); transform: translate(100%, -50%); }
   .pos-ss { top: 132px; left: calc(50% - 66px); }
@@ -518,7 +518,7 @@ body { min-width: 0; }
   .base-second { top: 107px; left: calc(50% - 7px); }
   .base-third { top: 182px; left: calc(50% - 82px); }
   .base-first { top: 182px; left: calc(50% + 68px); right: auto; }
-  .base-second span { top: 17px; left: calc(50% + 8px); }
+  .base-second span { top: auto; right: auto; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
   .base-third span { top: 13px; left: 50%; }
   .base-first span { top: 13px; left: 50%; right: auto; }
   .out-group > strong { position: static; }

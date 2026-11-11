@@ -1001,7 +1001,7 @@
       const player = fieldPlayers.find((candidate) => candidate.position === element.dataset.code);
       const playerName = String(player?.name || '').trim();
       const short = player ? `${playerName || `#${player.number}`}` : '尚無球員';
-      element.textContent = playerName ? `${element.dataset.code}: ${playerName}` : element.dataset.code;
+      element.textContent = playerName || element.dataset.code;
       element.title = `${element.dataset.position}：${short}`;
       element.setAttribute('aria-label', element.title);
     });
