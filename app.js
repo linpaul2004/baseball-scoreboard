@@ -542,7 +542,7 @@
       }
       if (!Number.isInteger(batterDestination)
         || (!details.fieldingInterference
-          && (batterDestination < 1 || batterDestination > 4))) {
+          && (batterDestination < 0 || batterDestination > 4))) {
         throw new Error('打者跑壘結果不正確。');
       }
     }
@@ -684,7 +684,8 @@
       advanceHitRunners(next, hitBases, batter, offense, runnerDestinations);
       clearCount(next);
       nextBatter(next);
-      const outsOnPlay = runnerOuts + Number(Boolean(details.fieldingInterference));
+      const batterOut = runnerDestinations?.batter === 0;
+      const outsOnPlay = runnerOuts + Number(batterOut);
       if (outsOnPlay) recordRunnerOuts(next, outsOnPlay);
     }
     return next;
@@ -965,6 +966,10 @@
       }
       if (event.fieldingInterference === true) {
         return `${playLabels[code]}（妨礙守備出局）`;
+      }
+      if (['single', 'double', 'triple'].includes(code)
+        && event.runnerDestinations?.batter === 0) {
+        return `${playLabels[code]}（打者觸殺）`;
       }
       if (isBatterAdvancingHit(event)) return `${playLabels[code]}（趁傳進壘）`;
       if (code === 'ground-out') {
