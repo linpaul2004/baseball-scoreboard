@@ -75,6 +75,34 @@
   function displayPlayerName(player) {
     return String(player?.name || '').trim() || player?.position || '球員';
   }
+  function parseEnglishPlayerName(name) {
+    const parts = String(name || '').trim().split(/\s+/);
+    if (parts.length < 2 || !/^[A-Za-z]+(?:['-][A-Za-z]+)*$/.test(parts[0])) return null;
+    const lastPart = parts[parts.length - 1];
+    const hasSuffix = /^(?:jr\.?|sr\.?|[ivxlcdm]+)$/i.test(lastPart);
+    const surnameParts = parts.slice(1, hasSuffix ? -1 : undefined);
+    if (!surnameParts.length || surnameParts.some((part) => !/^[A-Za-z][A-Za-z'.-]*$/.test(part))) return null;
+    return {
+      firstName: parts[0],
+      surname: surnameParts.join(' '),
+      suffix: hasSuffix ? lastPart : ''
+    };
+  }
+  function formattedPlayerNames(players) {
+    const parsedNames = players.map((player) => parseEnglishPlayerName(player?.name));
+    const surnameCounts = new Map();
+    parsedNames.forEach((parsed) => {
+      if (!parsed) return;
+      const key = parsed.surname.toLowerCase();
+      surnameCounts.set(key, (surnameCounts.get(key) || 0) + 1);
+    });
+    return players.map((player, index) => {
+      const parsed = parsedNames[index];
+      if (!parsed) return displayPlayerName(player);
+      const initialLength = surnameCounts.get(parsed.surname.toLowerCase()) > 1 ? 2 : 1;
+      return `${parsed.firstName.slice(0, initialLength)}. ${parsed.surname}${parsed.suffix ? ` ${parsed.suffix}` : ''}`;
+    });
+  }
   function batterName(gameState = state) {
     return displayPlayerName(activeBatter(gameState));
   }
@@ -1170,11 +1198,13 @@
       .filter((player) => player.position !== 'DH' && player.position !== 'P'),
     fielding.pitcher
     ];
+    const fieldPlayerNames = formattedPlayerNames(fieldPlayers);
     document.querySelectorAll('.field-position').forEach((element) => {
-      const player = fieldPlayers.find((candidate) => candidate.position === element.dataset.code);
+      const playerIndex = fieldPlayers.findIndex((candidate) => candidate.position === element.dataset.code);
+      const player = fieldPlayers[playerIndex];
       const playerName = String(player?.name || '').trim();
       const short = player ? `${playerName || `#${player.number}`}` : '尚無球員';
-      element.textContent = playerName || element.dataset.code;
+      element.textContent = playerName ? fieldPlayerNames[playerIndex] : element.dataset.code;
       element.title = `${element.dataset.position}：${short}`;
       element.setAttribute('aria-label', element.title);
     });
@@ -1190,13 +1220,23 @@
       const nextBatterIndex = state.orderIndexes[teamIndex];
       const pitcher = team.pitcher || team.lineup.find((player) => player.position === 'P');
       const pitcherName = String(pitcher?.name || '').trim();
+      const pitcherTitle = pitcherName
+        ? ` title="${escapeHtml(`投手：${pitcherName} #${pitcher?.number || ''}`)}"`
+        : '';
       const sideLabel = teamIndex === 0 ? '客隊' : '主隊';
       const teamLabel = team.name === sideLabel ? sideLabel : `${sideLabel}・${escapeHtml(team.name)}`;
+      const pitcherLineupIndex = team.lineup.findIndex((player) => player === pitcher);
+      const scorebookNames = formattedPlayerNames(pitcherLineupIndex === -1
+        ? [...team.lineup, ...(pitcher ? [pitcher] : [])]
+        : team.lineup);
+      const pitcherNameIndex = pitcherLineupIndex === -1 ? team.lineup.length : pitcherLineupIndex;
       return `<section class="scorebook-team"><h3><b>${teamLabel}</b><span>${teamBats ? '進攻' : '防守'}</span></h3><ol>${team.lineup.map((player, index) => {
         const currentBatter = teamBats && index === state.orderIndexes[teamIndex];
         const nextBatter = !teamBats && index === nextBatterIndex;
-        return `<li class="${currentBatter ? 'current-batter' : ''} ${nextBatter ? 'next-batter' : ''}"><span class="scorebook-order">${index + 1}</span><span class="scorebook-name">${escapeHtml(displayPlayerName(player))} <small>#${escapeHtml(player.number)}</small></span><span class="scorebook-position">${escapeHtml(player.position)}</span></li>`;
-      }).join('')}</ol><div class="scorebook-pitcher ${onFieldPitcher ? 'fielding-pitcher' : ''}"><span>P</span>${pitcherName ? `${escapeHtml(pitcherName)} ` : ''}#${escapeHtml(pitcher?.number || '')}</div></section>`;
+        const fullName = displayPlayerName(player);
+        const tooltip = `${index + 1}棒：${fullName} #${player.number} ${player.position}`;
+        return `<li class="${currentBatter ? 'current-batter' : ''} ${nextBatter ? 'next-batter' : ''}" title="${escapeHtml(tooltip)}"><span class="scorebook-order">${index + 1}</span><span class="scorebook-name">${escapeHtml(scorebookNames[index])} <small>#${escapeHtml(player.number)}</small></span><span class="scorebook-position">${escapeHtml(player.position)}</span></li>`;
+      }).join('')}</ol><div class="scorebook-pitcher ${onFieldPitcher ? 'fielding-pitcher' : ''}"${pitcherTitle}><span>P</span>${pitcherName ? `${escapeHtml(scorebookNames[pitcherNameIndex])} ` : ''}#${escapeHtml(pitcher?.number || '')}</div></section>`;
     }).join('');
     $('#return-latest-button').disabled = cursor === records.length;
     $('#delete-current-button').disabled = cursor === 0;
