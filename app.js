@@ -7,6 +7,12 @@
     ['SS', '游擊手'], ['LF', '左外野手'], ['CF', '中外野手'], ['RF', '右外野手'], ['DH', '指定打擊']
   ];
   const lineupPositions = positions.filter(([code]) => code !== 'P');
+  const rosterPositionOrders = {
+    roster: ['pitcher', 'catcher', 'infield', 'outfield', 'dh', 'unmarked'],
+    lineup: ['infield', 'outfield', 'catcher', 'dh', 'pitcher', 'unmarked'],
+    pitcher: ['pitcher', 'infield', 'outfield', 'catcher', 'dh', 'unmarked'],
+    pinch: ['dh', 'outfield', 'infield', 'catcher', 'pitcher', 'unmarked']
+  };
   const bases = ['一壘', '二壘', '三壘'];
   const playLabels = {
     'swinging-strike': '揮棒落空', 'called-strike': '好球沒揮棒', ball: '壞球',
@@ -213,17 +219,28 @@
     return playerRosters.find((roster) => roster.team === String(teamName || '').trim());
   }
 
-  function sortRosterPlayers(players, pitcherOrder = '') {
+  function rosterPositionCategory(position) {
+    const code = String(position || '').toUpperCase();
+    if (code === 'P') return 'pitcher';
+    if (code === 'C') return 'catcher';
+    if (['IF', '1B', '2B', '3B', 'SS'].includes(code)) return 'infield';
+    if (['OF', 'LF', 'CF', 'RF'].includes(code)) return 'outfield';
+    if (code === 'DH') return 'dh';
+    return 'unmarked';
+  }
+
+  function sortRosterPlayers(players, positionOrder = rosterPositionOrders.roster) {
+    const categoryOrder = new Map(positionOrder.map((category, index) => [category, index]));
     return [...players].sort((first, second) =>
-      (pitcherOrder === 'first' ? Number(second.position === 'P') - Number(first.position === 'P')
-        : pitcherOrder === 'last' ? Number(first.position === 'P') - Number(second.position === 'P') : 0)
+      categoryOrder.get(rosterPositionCategory(first.position))
+        - categoryOrder.get(rosterPositionCategory(second.position))
       || first.number.localeCompare(second.number, undefined, { numeric: true, sensitivity: 'base' })
       || first.name.localeCompare(second.name, undefined, { numeric: true, sensitivity: 'base' }));
   }
 
-  function renderRosterOptions(list, roster, pitcherOrder = '') {
+  function renderRosterOptions(list, roster, positionOrder = rosterPositionOrders.roster) {
     list.innerHTML = roster
-      ? sortRosterPlayers(roster.players, pitcherOrder).map((player) =>
+      ? sortRosterPlayers(roster.players, positionOrder).map((player) =>
         `<option value="${escapeHtml(player.name)}" label="#${escapeHtml(player.number)}${player.position ? ` · ${escapeHtml(player.position)}` : ''}"></option>`
       ).join('')
       : '';
@@ -232,8 +249,8 @@
   function renderTeamRosterOptions(teamIndex, teamName) {
     const prefix = teamIndex === 0 ? 'away' : 'home';
     const roster = rosterForTeam(teamName);
-    renderRosterOptions($(`#${prefix}-players`), roster, 'last');
-    renderRosterOptions($(`#${prefix}-pitchers`), roster, 'first');
+    renderRosterOptions($(`#${prefix}-players`), roster, rosterPositionOrders.lineup);
+    renderRosterOptions($(`#${prefix}-pitchers`), roster, rosterPositionOrders.pitcher);
     $('#lineup-form').querySelectorAll(`[data-roster-team="${teamIndex}"]`).forEach((input) => {
       const listId = input.name === `${prefix}PitcherName` ? `${prefix}-pitchers` : `${prefix}-players`;
       if (roster) input.setAttribute('list', listId);
@@ -263,7 +280,7 @@
     list.innerHTML = playerRosters.map((roster) => `
       <section class="roster-team">
         <h3>${escapeHtml(roster.team)}</h3>
-        <p>${sortRosterPlayers(roster.players).map((player) =>
+        <p>${sortRosterPlayers(roster.players, rosterPositionOrders.roster).map((player) =>
           `#${escapeHtml(player.number)}${player.position ? ` ${escapeHtml(player.position)}` : ''} ${escapeHtml(player.name)}`
         ).join('、')}</p>
       </section>`).join('');
@@ -1358,7 +1375,8 @@
       const headers = ['棒次', '姓名', '打數／打席', '安打', '犧牲打', '打點', '四壞', '觸身', '被三振'];
       const rows = battingRows[statsTeamIndex].flatMap((row) => row.players.map((player, participantIndex) => {
         const stats = row.stats.get(playerKey(statsTeamIndex, player)) || statLine();
-        const atBats = stats.appearances - stats.hbp - stats.sacrifices - stats.catcherInterferences;
+        const atBats = stats.appearances - stats.walks - stats.hbp
+          - stats.sacrifices - stats.catcherInterferences;
         const values = [`${atBats}／${stats.appearances}`, stats.hits, stats.sacrifices, stats.rbi, stats.walks,
           stats.hbp, stats.strikeouts];
         return `<tr class="${participantIndex ? 'stats-substitute-row' : ''}"><td class="stats-order">${participantIndex ? '' : `${row.order + 1}棒`}</td><td class="stats-player">${escapeHtml(displayPlayerName(player))}${player.number ? ` <small>#${escapeHtml(player.number)}</small>` : ''}</td>${values.map((value) => `<td>${value}</td>`).join('')}</tr>`;
@@ -2099,9 +2117,20 @@
     const roster = rosterForTeam(team.name);
     if (roster) form.elements.name.setAttribute('list', 'substitution-players');
     else form.elements.name.removeAttribute('list');
-    renderRosterOptions($('#substitution-players'), roster,
-      substitutionMode === 'defense' && defenseMode === 'replace' && form.elements.slot.value === 'pitcher'
-        ? 'first' : 'last');
+    let positionOrder = substitutionMode === 'defense'
+      ? rosterPositionOrders.lineup : rosterPositionOrders.pinch;
+    if (substitutionMode === 'defense' && defenseMode === 'replace') {
+      const selectedSlot = form.elements.slot.value;
+      const outgoing = selectedSlot === 'pitcher'
+        ? team.pitcher : team.lineup[Number(selectedSlot)];
+      const position = outgoing?.position === 'PH' || outgoing?.position === 'PR'
+        ? outgoing.previousPosition || outgoing.position : outgoing?.position;
+      const priority = rosterPositionCategory(selectedSlot === 'pitcher' ? 'P' : position);
+      if (['pitcher', 'catcher', 'infield', 'outfield'].includes(priority)) {
+        positionOrder = [priority, ...rosterPositionOrders.lineup.filter((category) => category !== priority)];
+      }
+    }
+    renderRosterOptions($('#substitution-players'), roster, positionOrder);
   }
   function syncSubstitutionRosterNumber() {
     const form = $('#substitution-form');
