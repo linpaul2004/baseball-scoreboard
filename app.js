@@ -103,6 +103,17 @@
       return `${parsed.firstName.slice(0, initialLength)}. ${parsed.surname}${parsed.suffix ? ` ${parsed.suffix}` : ''}`;
     });
   }
+  function formattedTeamPlayerName(name, team) {
+    const targetName = String(name || '').trim();
+    const players = [...team.lineup];
+    if (team.pitcher && !players.some((player) => String(player.name || '').trim() === String(team.pitcher.name || '').trim())) {
+      players.push(team.pitcher);
+    }
+    const playerIndex = players.findIndex((player) => String(player.name || '').trim() === targetName);
+    return playerIndex === -1
+      ? formattedPlayerNames([{ name: targetName }])[0]
+      : formattedPlayerNames(players)[playerIndex];
+  }
   function batterName(gameState = state) {
     return displayPlayerName(activeBatter(gameState));
   }
@@ -1184,10 +1195,12 @@
     const pitcher = currentPitcher();
     $('#at-bat-pitch-count').textContent = state.batterPitchCount;
     $('#pitch-count').textContent = pitcher ? state.pitcherCounts[pitcher.id] || 0 : 0;
+    const battingTeam = state.teams[activeTeamIndex()];
     ['first', 'second', 'third'].forEach((base, index) => {
       const runner = state.bases[index];
-      $(`#runner-${base}`).textContent = runner || '空';
-      $(`#field-runner-${base}`).textContent = runner ? runner : '';
+      const runnerName = runner ? formattedTeamPlayerName(runner, battingTeam) : '';
+      $(`#runner-${base}`).textContent = runnerName || '空';
+      $(`#field-runner-${base}`).textContent = runnerName;
       $(`#field-runner-${base}`).parentElement.classList.toggle('occupied', Boolean(runner));
       $(`#field-runner-${base}`).parentElement.title = runner ? `${bases[index]}：${runner}` : `${bases[index]}：空`;
     });
@@ -1236,7 +1249,7 @@
         const fullName = displayPlayerName(player);
         const tooltip = `${index + 1}棒：${fullName} #${player.number} ${player.position}`;
         return `<li class="${currentBatter ? 'current-batter' : ''} ${nextBatter ? 'next-batter' : ''}" title="${escapeHtml(tooltip)}"><span class="scorebook-order">${index + 1}</span><span class="scorebook-name">${escapeHtml(scorebookNames[index])} <small>#${escapeHtml(player.number)}</small></span><span class="scorebook-position">${escapeHtml(player.position)}</span></li>`;
-      }).join('')}</ol><div class="scorebook-pitcher ${onFieldPitcher ? 'fielding-pitcher' : ''}"${pitcherTitle}><span>P</span>${pitcherName ? `${escapeHtml(scorebookNames[pitcherNameIndex])} ` : ''}#${escapeHtml(pitcher?.number || '')}</div></section>`;
+      }).join('')}</ol><div class="scorebook-pitcher ${onFieldPitcher ? 'fielding-pitcher' : ''}"${pitcherTitle}><span>P</span>${pitcherName ? `<span class="scorebook-pitcher-name">${escapeHtml(scorebookNames[pitcherNameIndex])}</span>` : ''}<span class="scorebook-pitcher-number">#${escapeHtml(pitcher?.number || '')}</span></div></section>`;
     }).join('');
     $('#return-latest-button').disabled = cursor === records.length;
     $('#delete-current-button').disabled = cursor === 0;
@@ -1653,9 +1666,10 @@
       zone.classList.toggle('drop-target', false);
       zone.querySelector('span').innerHTML = occupants.map(([index]) => {
         const runner = index === 'batter' ? batterName() : state.bases[Number(index)];
+        const displayName = formattedTeamPlayerName(runner, state.teams[activeTeamIndex()]);
         const fixed = uncaughtStrikeRunnerIsFixed(index)
           || index === 'batter' && batterIsFixedOut();
-        return `<span class="drag-runner ${fixed ? 'fixed-runner' : ''}" ${fixed ? '' : 'draggable="true"'} data-runner-index="${index}" title="${fixed ? '固定位置' : `拖曳以移動 ${escapeHtml(runner)}`}">${escapeHtml(runner)}${index === 'batter' ? '（打者）' : ''}</span>`;
+        return `<span class="drag-runner ${fixed ? 'fixed-runner' : ''}" ${fixed ? '' : 'draggable="true"'} data-runner-index="${index}" title="${fixed ? '固定位置' : `拖曳以移動 ${escapeHtml(runner)}`}">${escapeHtml(displayName)}${index === 'batter' ? '（打者）' : ''}</span>`;
       }).join('');
       zone.ondragover = onRunnerDragOver;
       zone.ondragleave = onRunnerDragLeave;
