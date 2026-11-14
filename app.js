@@ -337,6 +337,7 @@
 
   function addRecord(event) {
     const previous = state;
+    const appending = cursor === records.length;
     const nextState = applyEvent(previous, event);
     if (nextState === previous) return;
     const updatedRecords = records.slice();
@@ -357,8 +358,10 @@
     selectedInning = location.inning;
     selectedHalf = location.half;
     saveAndRender();
-    const recordList = $('#record-list');
-    recordList.scrollTop = recordList.scrollHeight;
+    if (appending) {
+      const recordList = $('#record-list');
+      recordList.scrollTop = recordList.scrollHeight;
+    }
   }
 
   function nextBatter(gameState) {
@@ -1104,10 +1107,35 @@
     const { entries, innings } = currentHalfRecords();
     if (!innings.includes(selectedInning)) selectedInning = state.inning;
     if (!innings.includes(selectedInning)) selectedInning = innings[innings.length - 1];
+    const locations = entries.map(({ inning, half }) => ({ inning, half }));
+    locations.push({ inning: state.inning, half: state.half });
+    const compareLocations = (first, second) => first.inning - second.inning
+      || (first.half === second.half ? 0 : first.half === 'top' ? -1 : 1);
+    const uniqueLocations = [...new Map(locations.map((location) =>
+      [`${location.inning}-${location.half}`, location])).values()]
+      .sort(compareLocations);
+    const firstLocation = uniqueLocations[0];
+    const lastLocation = uniqueLocations.at(-1);
+    const navigableHalves = [];
+    for (let inning = firstLocation.inning; inning <= lastLocation.inning; inning += 1) {
+      for (const half of ['top', 'bottom']) {
+        const location = { inning, half };
+        if (compareLocations(location, firstLocation) >= 0
+          && compareLocations(location, lastLocation) <= 0) navigableHalves.push(location);
+      }
+    }
+    let selectedLocationIndex = navigableHalves.findIndex((location) =>
+      location.inning === selectedInning && location.half === selectedHalf);
+    if (selectedLocationIndex === -1) {
+      selectedInning = state.inning;
+      selectedHalf = state.half;
+      selectedLocationIndex = navigableHalves.findIndex((location) =>
+        location.inning === selectedInning && location.half === selectedHalf);
+    }
     $('#record-total').textContent = records.length;
     $('#history-inning-label').textContent = `第 ${selectedInning} 局`;
-    $('#previous-inning').disabled = selectedInning <= innings[0];
-    $('#next-inning').disabled = selectedInning >= innings[innings.length - 1];
+    $('#previous-inning').disabled = selectedLocationIndex <= 0;
+    $('#next-inning').disabled = selectedLocationIndex === navigableHalves.length - 1;
     $('#half-tabs').innerHTML = ['top', 'bottom'].map((half) => {
       const count = entries.filter((entry) => entry.inning === selectedInning && entry.half === half).length;
       return `<button type="button" role="tab" aria-selected="${half === selectedHalf}" class="half-tab ${half === selectedHalf ? 'selected' : ''}" data-half="${half}">${half === 'top' ? '上半局' : '下半局'} <span>${count}</span></button>`;
@@ -1117,7 +1145,17 @@
       renderHistory();
     }));
     const visibleRecords = entries.filter((entry) => entry.inning === selectedInning && entry.half === selectedHalf);
-    $('#record-list').innerHTML = visibleRecords.map(({ record, index, stateBefore, stateAfter, inning, half }) => {
+    const firstHalfRecord = visibleRecords[0];
+    const halfStartIndex = firstHalfRecord
+      ? firstHalfRecord.index + Number(firstHalfRecord.record.type === 'setup'
+        && firstHalfRecord.record.code === 'set-game-state')
+      : cursor;
+    const showHalfStart = visibleRecords.length > 0
+      || (state.inning === selectedInning && state.half === selectedHalf);
+    const halfStart = showHalfStart
+      ? `<li class="half-start-item"><button class="half-start-entry ${cursor === halfStartIndex ? 'active' : ''}" type="button" data-record-cursor="${halfStartIndex}" data-record-inning="${selectedInning}" data-record-half="${selectedHalf}" aria-label="回到${halfLabel(selectedInning, selectedHalf)}最開始"><span>${halfLabel(selectedInning, selectedHalf)}</span><small>半局開始</small></button></li>`
+      : '';
+    $('#record-list').innerHTML = halfStart + visibleRecords.map(({ record, index, stateBefore, stateAfter, inning, half }) => {
       const position = index + 1;
       const lineupUpdate = record.code === 'set-roster';
       const label = describeEvent(record, stateBefore, stateAfter);
@@ -1261,13 +1299,14 @@
 
   function updateGameOverHistoryHeight() {
     const gameLayout = $('.game-layout');
-    if (!state.gameOver) {
+    if (!state.gameOver || !window.matchMedia('(min-width: 901px)').matches) {
       gameLayout.style.removeProperty('--game-over-history-height');
       return;
     }
     const historyTop = $('.history-panel').getBoundingClientRect().top;
-    const bottomGap = 16;
-    const availableHeight = Math.max(0, window.innerHeight - historyTop - bottomGap);
+    const footerHeight = $('.footer-note').getBoundingClientRect().height;
+    const bottomGap = 8;
+    const availableHeight = Math.max(0, window.innerHeight - historyTop - footerHeight - bottomGap);
     gameLayout.style.setProperty('--game-over-history-height', `${availableHeight}px`);
   }
 
@@ -1744,6 +1783,17 @@
     timeViolationDialog.close();
   }));
   $('#record-list').addEventListener('click', (event) => {
+    const startButton = event.target.closest('button[data-record-cursor]');
+    if (startButton) {
+      const nextCursor = Number(startButton.dataset.recordCursor);
+      if (!Number.isInteger(nextCursor) || nextCursor < 0 || nextCursor > records.length) return;
+      cursor = nextCursor;
+      state = cursor ? replay(records, cursor) : defaultState();
+      selectedInning = Number(startButton.dataset.recordInning);
+      selectedHalf = startButton.dataset.recordHalf;
+      saveAndRender();
+      return;
+    }
     const button = event.target.closest('button[data-record-index]');
     if (!button) return;
     const index = Number(button.dataset.recordIndex);
@@ -1757,14 +1807,19 @@
       ?.scrollIntoView({ block: 'nearest' });
   });
   $('#previous-inning').addEventListener('click', () => {
-    const { innings } = currentHalfRecords();
-    const previous = innings.filter((inning) => inning < selectedInning).at(-1);
-    if (previous) selectedInning = previous;
+    if (selectedHalf === 'bottom') selectedHalf = 'top';
+    else {
+      selectedInning -= 1;
+      selectedHalf = 'bottom';
+    }
     renderHistory();
   });
   $('#next-inning').addEventListener('click', () => {
-    const { innings } = currentHalfRecords();
-    selectedInning = innings.find((inning) => inning > selectedInning) || selectedInning;
+    if (selectedHalf === 'top') selectedHalf = 'bottom';
+    else {
+      selectedInning += 1;
+      selectedHalf = 'top';
+    }
     renderHistory();
   });
   $('#return-latest-button').addEventListener('click', () => {
@@ -1787,7 +1842,7 @@
       return;
     }
     records = updatedRecords;
-    cursor = Math.min(deletedIndex + 1, records.length);
+    cursor = deletedIndex;
     state = cursor ? replay(records, cursor) : defaultState();
     const currentEntry = currentHalfRecords().entries[cursor - 1];
     selectedInning = currentEntry?.inning ?? state.inning;
@@ -2510,9 +2565,14 @@
       records = imported;
       cursor = data.cursor;
       state = cursor ? replay(records, cursor) : defaultState();
-      selectedInning = 0;
-      selectedHalf = 'top';
+      const currentEntry = currentHalfRecords().entries[cursor - 1];
+      selectedInning = currentEntry?.inning ?? state.inning;
+      selectedHalf = currentEntry?.half ?? state.half;
       saveAndRender();
+      const currentRecord = cursor
+        ? $('#record-list').querySelector(`[data-record-index="${cursor - 1}"]`)
+        : $('#record-list').querySelector(`button[data-record-cursor="${cursor}"]`);
+      currentRecord?.scrollIntoView({ block: 'nearest' });
       showToast(`已匯入 ${records.length} 筆逐球紀錄。`);
     } catch (error) {
       console.error('匯入逐球紀錄失敗。', error);

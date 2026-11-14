@@ -19,7 +19,6 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 360px; background: radial-gradient(ellipse at 15% 0%, #203128 0, transparent 35rem), var(--bg); }
-body.game-over { overflow: hidden; }
 button, input, select { font: inherit; }
 button { color: inherit; }
 .topbar { height: 70px; padding: 0 max(28px, calc((100vw - 1260px) / 2)); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #26322c; background: rgba(16, 24, 21, .84); }
@@ -118,6 +117,10 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .record-item .record-entry { width: 100%; color: #d3dbd2; text-align: left; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
 .record-item .record-entry:hover { border-color: #445740; }
 .record-item .record-entry.active { border-color: #647d4e; background: #253328; }
+.half-start-entry { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 10px; border: 1px dashed #53634e; border-radius: 7px; padding: 8px 10px; background: #1b2820; color: #d3e2c7; text-align: left; cursor: pointer; }
+.half-start-entry:hover, .half-start-entry:focus-visible, .half-start-entry.active { border-color: var(--accent); background: #253328; outline: 0; }
+.half-start-entry > span { font-size: 13px; font-weight: 700; }
+.half-start-entry small { color: #a4b49f; font-size: 11px; }
 .record-number { color: #87978a; font: 9px var(--mono); }
 .record-label { font-size: 10px; }
 .record-meta { color: #839187; font: 9px var(--mono); }
@@ -258,12 +261,14 @@ h1 { margin: 0; font-size: 26px; letter-spacing: -.04em; }
 .record-item .record-entry { min-height: 37px; }
 .record-label { font-size: 13px; }
 .game-layout.game-over { align-items: start; }
-.game-layout.game-over .play-column {
-  height: var(--game-over-history-height, 430px);
-  grid-template-rows: minmax(0, 1fr);
+@media (min-width: 901px) {
+  .game-layout.game-over .play-column {
+    height: var(--game-over-history-height, 430px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .game-layout.game-over .side-column { height: fit-content; }
+  .game-layout.game-over .history-panel { height: 100%; min-height: 0; }
 }
-.game-layout.game-over .side-column { height: fit-content; }
-.game-layout.game-over .history-panel { height: 100%; min-height: 0; }
 .record-meta, .record-number { font-size: 11px; }
 .field-position { z-index: 4; }
 .pos-lf { left: 25%; }
